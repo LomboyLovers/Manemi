@@ -24,4 +24,4 @@ Complete transaction history showing every logged bill, edits, and recorded sett
 
 # Reporting & Exporting
 Visual breakdown of group expenses by category using simple charts.
-Export monthly group expense summaries as CSV or PDF files for easy archiving.
+
