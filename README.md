@@ -1,4 +1,4 @@
-# SplitEase 
+# Manemi
 
 SplitEase is a smart web application designed to eliminate financial friction among roommates, travel groups, and event organizers. It simplifies shared expense logging, tracks running group balances, and uses a settlement algorithm to reduce the total number of payments required to clear all group debts.
 # Core Functionality & Features
