@@ -1,0 +1,7 @@
+DO ALL OF THESE IN TERMINAL
+HOW TO NAVIGATE 
+    cd my-next-app
+
+
+HOW TO RUN IT ON MOBILE
+    npm run dev -- -H 0.0.0.0
