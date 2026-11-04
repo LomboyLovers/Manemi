@@ -1,7 +1,64 @@
+"use client";
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export default function Register() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleRegister(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const formData = new FormData(event.currentTarget);
+
+    const fullName = String(formData.get("fullname") || "");
+    const username = String(formData.get("username") || "");
+    const email = String(formData.get("email") || "");
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      setLoading(false);
+      return;
+    }
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          username: username,
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+
+    if (data.session) {
+      router.push("/dashboard");
+      router.refresh();
+    } else {
+      setError(
+        "Account created. Please check your email to confirm your account before logging in.",
+      );
+    }
+  }
   return (
     <main className="register-page bg-pan-left">
       <section className="register-container">
@@ -22,7 +79,7 @@ export default function Register() {
         <div className="register-card">
           <h1>Register</h1>
 
-          <form>
+          <form onSubmit={handleRegister}>
             {/* FULL NAME */}
             <div className="form-group">
               <label htmlFor="fullname">Full Name</label>
@@ -84,9 +141,14 @@ export default function Register() {
             </div>
 
             {/* TEMPORARY REGISTER BUTTON */}
-            <Link href="/dashboard" className="create-account-button">
-              Create Account
-            </Link>
+            <button
+              type="submit"
+              className="create-account-button"
+              disabled={loading}
+            >
+              {loading ? "Creating Account..." : "Create Account"}
+            </button>
+            {error && <p role="status">{error}</p>}
           </form>
 
           {/* BACK TO LOGIN */}
