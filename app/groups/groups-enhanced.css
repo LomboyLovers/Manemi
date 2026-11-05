@@ -1,0 +1,297 @@
+/* Scoped styling for the populated Groups screen */
+.manemi-groups-page:has(.manemi-rich-heading) {
+  background: #111114;
+  color: #f6f5f8;
+  min-height: 100dvh;
+}
+.manemi-groups-page:has(.manemi-rich-heading) .groups-page-content {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 30px 22px 145px;
+  box-sizing: border-box;
+}
+.manemi-rich-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin-bottom: 22px;
+}
+.manemi-rich-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #9035f2;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 700;
+}
+.manemi-rich-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.manemi-rich-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #24242a;
+  border: 1px solid #3b3a42;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.manemi-rich-circle img {
+  object-fit: contain;
+}
+.manemi-rich-account-menu {
+  position: absolute;
+  right: 0;
+  top: 56px;
+  z-index: 20;
+  background: #29272f;
+  padding: 10px;
+  border: 1px solid #48434f;
+  border-radius: 12px;
+}
+.manemi-rich-account-menu button {
+  color: #fff;
+  padding: 8px 18px;
+}
+.manemi-rich-heading h1 {
+  font-size: clamp(35px, 7vw, 46px);
+  line-height: 1.1;
+  font-weight: 750;
+  letter-spacing: -1.6px;
+  margin: 0 0 8px;
+}
+.manemi-rich-heading p {
+  color: #aaa8b3;
+  font-size: 16px;
+  margin: 0 0 25px;
+}
+.manemi-rich-balances {
+  border: 1px solid #7540a3;
+  border-radius: 27px;
+  padding: 23px 20px 18px;
+  background: radial-gradient(
+    ellipse at top right,
+    #583079 0%,
+    #261d31 48%,
+    #1d1c21 100%
+  );
+  margin-bottom: 22px;
+}
+.manemi-rich-balances h2 {
+  font-size: 13px;
+  letter-spacing: 1.6px;
+  color: #bcb9c4;
+  margin: 0 0 18px;
+  font-weight: 700;
+}
+.manemi-rich-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.manemi-rich-balance-box {
+  min-width: 0;
+  border: 1px solid #34313d;
+  border-radius: 18px;
+  background: #17161eaa;
+  padding: 15px 13px;
+  display: flex;
+  flex-direction: column;
+}
+.manemi-rich-balance-box span {
+  color: #b8b5c0;
+  font-size: 13px;
+}
+.manemi-rich-balance-box strong {
+  font-size: clamp(21px, 4.8vw, 36px);
+  letter-spacing: -0.8px;
+  white-space: nowrap;
+  margin: 8px 0 2px;
+}
+.manemi-rich-green {
+  color: #35d991;
+}
+.manemi-rich-red {
+  color: #ff676d;
+}
+.manemi-rich-balance-box small {
+  color: #97939f;
+  font-size: 12px;
+}
+.manemi-rich-placeholder {
+  font-size: 11px;
+  color: #bcb7c4;
+  margin: 12px 0 0;
+}
+.manemi-rich-filter-list {
+  display: flex;
+  overflow-x: auto;
+  gap: 9px;
+  padding: 2px 0 13px;
+  scrollbar-width: none;
+}
+.manemi-rich-filter-list::-webkit-scrollbar {
+  display: none;
+}
+.manemi-rich-filter {
+  flex: none;
+  background: #24242a;
+  color: #aaa8b3;
+  border: 1px solid #39383f;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.manemi-rich-filter.selected {
+  background: #9035f2;
+  color: #fff;
+  border-color: #9035f2;
+}
+.manemi-rich-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #202025;
+  border: 1px solid #35343b;
+  border-radius: 14px;
+  padding: 9px 13px;
+  margin: 4px 0 24px;
+}
+.manemi-rich-search-row input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: white;
+  font-size: 14px;
+}
+.manemi-rich-group-section > h2 {
+  font-size: 13px;
+  letter-spacing: 1.7px;
+  color: #9895a1;
+  margin: 0 0 15px;
+}
+.manemi-rich-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+.manemi-rich-group-card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid #36353d;
+  background: linear-gradient(135deg, #202024, #1a1a1e);
+  border-radius: 23px;
+  padding: 16px;
+}
+.manemi-rich-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.manemi-rich-group-emoji {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #29292f;
+  font-size: 27px;
+}
+.manemi-rich-card-menu-wrap {
+  position: relative;
+}
+.manemi-rich-dots {
+  border: 0;
+  background: transparent;
+  color: #a9a5b1;
+  font-size: 19px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.manemi-rich-card-popover {
+  position: absolute;
+  right: 0;
+  top: 29px;
+  z-index: 5;
+  width: 155px;
+  padding: 10px;
+  background: #302d36;
+  border: 1px solid #48434f;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.manemi-rich-group-card h3 {
+  margin: 0 0 4px;
+  font-size: clamp(16px, 3.5vw, 22px);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.manemi-rich-members {
+  margin: 0;
+  font-size: 12px;
+  color: #a6a2ad;
+}
+.manemi-rich-card-balance {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+}
+.manemi-rich-card-balance span {
+  color: #43d992;
+  font-size: 12px;
+}
+.manemi-rich-card-balance strong {
+  color: #43d992;
+  font-size: clamp(19px, 4.5vw, 30px);
+  margin: 5px 0;
+}
+.manemi-rich-card-balance small {
+  color: #9895a1;
+  font-size: 11px;
+}
+.manemi-rich-create-another {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 13px;
+  border: 1px solid #7540a3;
+  background: #2d2038;
+  border-radius: 14px;
+  color: #f6eafa;
+  cursor: pointer;
+  font-weight: 600;
+}
+.manemi-rich-filter-note,
+.manemi-rich-load-error {
+  color: #c6bdcd;
+  font-size: 13px;
+  margin: 10px 0 16px;
+}
+.manemi-groups-page:has(.manemi-rich-heading) .groups-bottom-navigation {
+  z-index: 10;
+}
+@media (max-width: 370px) {
+  .manemi-rich-balance-box {
+    padding: 12px 9px;
+  }
+  .manemi-rich-balance-box strong {
+    font-size: 20px;
+  }
+  .manemi-rich-group-card {
+    padding: 12px;
+  }
+  .manemi-rich-group-card h3 {
+    font-size: 15px;
+  }
+}
