@@ -1,0 +1,14 @@
+.manemi-rich-group-card[role="link"] {
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    transform 0.18s;
+}
+.manemi-rich-group-card[role="link"]:hover {
+  border-color: #8e3ef2;
+  transform: translateY(-2px);
+}
+.manemi-rich-group-card[role="link"]:focus-visible {
+  outline: 2px solid #a35aff;
+  outline-offset: 3px;
+}

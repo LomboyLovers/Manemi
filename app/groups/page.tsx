@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import "./groups-enhanced.css";
+import "./groups-navigation.css";
 
 // ==========================================
 // CUSTOM ICON COMPONENT
@@ -396,7 +397,23 @@ export default function GroupsPage() {
                   group.name.toLowerCase().includes(search.toLowerCase()),
                 )
                 .map((group) => (
-                  <article className="manemi-rich-group-card" key={group.id}>
+                  <article
+                    className="manemi-rich-group-card"
+                    key={group.id}
+                    onClick={() => router.push(`/groups/${group.id}`)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.target === event.currentTarget &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        event.preventDefault();
+                        router.push(`/groups/${group.id}`);
+                      }
+                    }}
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`Open ${group.name} details`}
+                  >
                     <div className="manemi-rich-card-top">
                       <span
                         className="manemi-rich-group-emoji"
@@ -410,11 +427,12 @@ export default function GroupsPage() {
                           className="manemi-rich-dots"
                           aria-label={`Options for ${group.name}`}
                           aria-expanded={groupMenu === group.id}
-                          onClick={() =>
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setGroupMenu(
                               groupMenu === group.id ? null : group.id,
-                            )
-                          }
+                            );
+                          }}
                         >
                           •••
                         </button>
