@@ -1,0 +1,20 @@
+.manemi-skeleton {
+  background: linear-gradient(100deg, #24212d 20%, #383044 40%, #24212d 60%);
+  background-size: 200% 100%;
+  animation: manemi-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes manemi-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manemi-skeleton {
+    animation: none;
+  }
+}

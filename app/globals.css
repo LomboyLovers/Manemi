@@ -3150,3 +3150,38 @@ button:disabled {
   height: 22px;
   object-fit: contain;
 }
+
+/* Smooth content appearance */
+.manemi-detail-content {
+  animation: manemi-page-enter 260ms ease-out both;
+}
+
+.md-skeleton-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 110px;
+}
+
+.md-skeleton-filters {
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+}
+
+@keyframes manemi-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manemi-detail-content {
+    animation: none;
+  }
+}

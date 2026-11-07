@@ -1,0 +1,333 @@
+.groups-skeleton-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  padding-bottom: 110px;
+  animation: gs-enter 260ms ease-out both;
+}
+
+/* Global balances panel */
+.gs-balances {
+  padding: 16px;
+  border: 1px solid #704097;
+  border-radius: 21px;
+  background: linear-gradient(115deg, #211a2b, #32203e);
+}
+
+.gs-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.gs-balance-card {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid #37303f;
+  background: #1c1923;
+}
+
+/* Category filters */
+.gs-categories {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.gs-categories > * {
+  flex-shrink: 0;
+}
+
+/* Search bar */
+.gs-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 35px;
+  padding: 0 12px;
+  border: 1px solid #37333f;
+  border-radius: 12px;
+  background: #1d1c23;
+}
+
+/* Groups grid */
+.gs-groups-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.gs-group-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 194px;
+  padding: 13px;
+  border: 1px solid #37333f;
+  border-radius: 19px;
+  background: #1d1c23;
+}
+
+.gs-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.gs-card-title {
+  margin-top: 17px;
+}
+
+.gs-card-balance {
+  margin-top: auto;
+  padding-top: 17px;
+}
+
+/* Smooth appearance */
+@keyframes gs-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 480px) {
+  .gs-balances {
+    padding: 13px;
+  }
+
+  .gs-balance-card {
+    padding: 10px;
+  }
+
+  .gs-groups-grid {
+    gap: 10px;
+  }
+
+  .gs-group-card {
+    padding: 11px;
+    min-height: 185px;
+  }
+
+  .gs-card-balance .manemi-skeleton {
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .groups-skeleton-page {
+    animation: none;
+  }
+}
+/* Match the real Groups page */
+.groups-skeleton-page {
+  margin-top: 18px;
+  gap: 18px;
+}
+
+.gs-balances {
+  min-height: 176px;
+}
+
+.gs-balance-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gs-balance-card {
+  min-height: 92px;
+}
+
+.gs-categories {
+  min-height: 34px;
+}
+
+.gs-search {
+  min-height: 34px;
+}
+
+.gs-groups-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gs-group-card {
+  min-height: 194px;
+}
+
+@media (max-width: 480px) {
+  .gs-balances {
+    min-height: 176px;
+  }
+
+  .gs-groups-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+/* Match Groups page header */
+
+.gs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.gs-avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.gs-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gs-header-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+/* Match Groups page heading */
+
+.gs-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.gs-heading-title {
+  width: 155px;
+  height: 42px;
+  border-radius: 8px;
+}
+
+.gs-heading-description {
+  width: min(300px, 85%);
+  height: 16px;
+  border-radius: 6px;
+}
+
+/* Match actual Groups page spacing */
+
+.groups-skeleton-page {
+  gap: 0;
+  margin-top: 0;
+}
+
+.gs-header {
+  margin-bottom: 22px;
+}
+
+.gs-heading {
+  margin-bottom: 25px;
+}
+
+.gs-balances {
+  margin-bottom: 22px;
+}
+
+.gs-categories {
+  margin-bottom: 13px;
+}
+
+.gs-search {
+  margin-bottom: 24px;
+}
+
+.gs-groups-grid {
+  margin-top: 15px;
+}
+
+/* Match loaded Groups page dimensions */
+
+.gs-balances {
+  min-height: 0;
+  padding: 23px 20px 18px;
+  border-radius: 27px;
+  box-sizing: border-box;
+}
+
+.gs-balance-grid {
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.gs-balance-card {
+  min-height: 92px;
+  padding: 15px 13px;
+  border-radius: 18px;
+}
+
+.gs-categories {
+  min-height: 34px;
+}
+
+.gs-search {
+  height: 35px;
+  min-height: 35px;
+  border-radius: 14px;
+}
+
+.gs-groups-grid {
+  gap: 13px;
+}
+
+.gs-group-card {
+  min-height: 194px;
+  padding: 16px;
+  border-radius: 23px;
+}
+/* Final skeleton spacing adjustments */
+
+.groups-skeleton-page {
+  margin-top: 0;
+  gap: 0;
+}
+
+.gs-header {
+  margin-bottom: 22px;
+}
+
+.gs-heading {
+  margin-bottom: 25px;
+}
+
+.gs-balances {
+  margin-bottom: 22px;
+}
+
+.gs-categories {
+  margin-bottom: 13px;
+}
+
+.gs-search {
+  margin-bottom: 24px;
+}
+
+.gs-active-count {
+  margin-bottom: 15px;
+}
+
+.gs-groups-grid {
+  margin-top: 0;
+}

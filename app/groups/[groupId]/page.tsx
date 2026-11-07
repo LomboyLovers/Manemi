@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import "./group-details.css";
+import GroupDetailsSkeleton from "@/components/GroupDetailsSkeleton";
+import Image from "next/image";
 
 type Group = {
   groupId: string;
@@ -14,7 +16,12 @@ type Group = {
 
 type Expense = {
   expenseId: string;
+  paidBy_UserId: string;
+  title: string;
   totalAmount: number;
+  expenseDate: string;
+  category: string | null;
+  receiptUrl: string | null;
 };
 
 const formatPeso = (amount: number) =>
@@ -32,6 +39,15 @@ export default function GroupDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingExpense, setDeletingExpense] = useState(false);
+  const [expenseActionError, setExpenseActionError] = useState("");
+  const [expenseNotice, setExpenseNotice] = useState("");
+  const [addedExpense, setAddedExpense] = useState<Expense | null>(null);
+  const [expenseSheetClosing, setExpenseSheetClosing] = useState(false);
+  const [refreshExpenses, setRefreshExpenses] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -78,8 +94,11 @@ export default function GroupDetailsPage() {
 
       const { data: expenseData, error: expenseError } = await supabase
         .from("Expense")
-        .select("expenseId, totalAmount")
-        .eq("groupId", params.groupId);
+        .select(
+          "expenseId, paidBy_UserId, title, totalAmount, expenseDate, category, receiptUrl",
+        )
+        .eq("groupId", params.groupId)
+        .order("expenseDate", { ascending: false });
 
       if (!active) return;
 
@@ -88,6 +107,26 @@ export default function GroupDetailsPage() {
         setError("Unable to load group expenses.");
       } else {
         setExpenses(expenseData ?? []);
+        // Read the saved expense ID after returning from Add Expense.
+        // Match it against the database result, not a hardcoded title/amount.
+        const paramsFromUrl = new URLSearchParams(window.location.search);
+        const addedId = paramsFromUrl.get("expenseAdded");
+        if (addedId) {
+          const match = (expenseData ?? []).find(
+            (item) => item.expenseId === addedId,
+          );
+          if (match) {
+            setAddedExpense(match);
+            setExpenseNotice("");
+          }
+          paramsFromUrl.delete("expenseAdded");
+          const remaining = paramsFromUrl.toString();
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `${window.location.pathname}${remaining ? `?${remaining}` : ""}${window.location.hash}`,
+          );
+        }
       }
 
       setLoading(false);
@@ -98,7 +137,79 @@ export default function GroupDetailsPage() {
     return () => {
       active = false;
     };
-  }, [params.groupId]);
+  }, [params.groupId, refreshExpenses]);
+
+  const openExpenseDetails = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setShowDeleteConfirm(false);
+    setExpenseSheetClosing(false);
+    setExpenseActionError("");
+  };
+
+  const closeExpenseDetails = () => {
+    setExpenseSheetClosing(true);
+
+    window.setTimeout(() => {
+      setSelectedExpense(null);
+      setShowDeleteConfirm(false);
+      setExpenseSheetClosing(false);
+      setExpenseActionError("");
+    }, 220);
+  };
+
+  const deleteSelectedExpense = async () => {
+    if (!selectedExpense || deletingExpense) return;
+
+    setDeletingExpense(true);
+    setExpenseActionError("");
+
+    try {
+      const supabase = createClient();
+
+      const { data, error } = await supabase.functions.invoke(
+        "delete-expense",
+        {
+          method: "POST",
+          body: { expenseId: selectedExpense.expenseId },
+        },
+      );
+
+      if (error) {
+        let message = error.message;
+
+        if (error.context instanceof Response) {
+          const responseBody = await error.context.json().catch(() => null);
+
+          message = responseBody?.error ?? message;
+        }
+
+        throw new Error(message);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+        console.log("CREATE EXPENSE RESPONSE:", data);
+      }
+
+      if (data?.expenseId !== selectedExpense.expenseId) {
+        throw new Error("Unable to verify the deletion.");
+      }
+
+      const deletedTitle = selectedExpense.title;
+
+      setShowDeleteConfirm(false);
+      setSelectedExpense(null);
+      setExpenseSheetClosing(false);
+      setRefreshExpenses((previous) => previous + 1);
+      setExpenseNotice(`Deleted "${deletedTitle}" successfully.`);
+    } catch (error) {
+      setExpenseActionError(
+        error instanceof Error ? error.message : "Unable to delete expense.",
+      );
+    } finally {
+      setDeletingExpense(false);
+    }
+  };
 
   const openAddExpense = () => {
     router.push(`/groups/${params.groupId}/add-expense`);
@@ -110,6 +221,32 @@ export default function GroupDetailsPage() {
   );
 
   const transactionCount = expenses.length;
+  const categories = [
+    "All",
+    ...Array.from(
+      new Set(expenses.map((expense) => expense.category).filter(Boolean)),
+    ),
+  ] as string[];
+
+  const filteredExpenses =
+    activeCategory === "All"
+      ? expenses
+      : expenses.filter((expense) => expense.category === activeCategory);
+
+  const categoryIcon = (category: string | null) => {
+    switch (category?.toLowerCase()) {
+      case "food":
+        return "🍔";
+      case "transport":
+        return "🚕";
+      case "lodging":
+        return "🏠";
+      case "shopping":
+        return "🛍️";
+      default:
+        return "💳";
+    }
+  };
 
   // Temporary until group members are connected.
   const memberCount = 1;
@@ -159,7 +296,7 @@ export default function GroupDetailsPage() {
         </header>
 
         {loading ? (
-          <p className="md-state">Loading group...</p>
+          <GroupDetailsSkeleton />
         ) : error ? (
           <div className="md-state" role="alert">
             {error}
@@ -248,23 +385,92 @@ export default function GroupDetailsPage() {
                   </button>
                 </section>
               ) : (
-                <section className="md-first-expense">
-                  <h2>Group Expenses</h2>
+                <section className="md-expenses-section">
+                  <div className="md-tabs">
+                    <button type="button" className="active">
+                      Expenses
+                    </button>
 
-                  <p>
-                    {transactionCount}{" "}
-                    {transactionCount === 1 ? "expense" : "expenses"} recorded
-                    in this group.
-                  </p>
+                    <button
+                      type="button"
+                      onClick={() => alert("Balances coming soon.")}
+                    >
+                      Balances
+                    </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    className="md-add-first"
-                    onClick={openAddExpense}
-                  >
-                    <span aria-hidden="true">＋</span>
-                    Add Expense
-                  </button>
+                  <div className="md-categories">
+                    {categories.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className={activeCategory === category ? "active" : ""}
+                        onClick={() => setActiveCategory(category)}
+                      >
+                        {category !== "All" && categoryIcon(category)}
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="md-transactions">
+                    {filteredExpenses.length === 0 ? (
+                      <p className="md-no-transactions">
+                        No expenses found in this category.
+                      </p>
+                    ) : (
+                      filteredExpenses.map((expense) => (
+                        <article
+                          key={expense.expenseId}
+                          className="md-transaction-card md-transaction-clickable"
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View details for ${expense.title}`}
+                          onClick={() => {
+                            console.log("Expense clicked:", expense);
+                            openExpenseDetails(expense);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openExpenseDetails(expense);
+                            }
+                          }}
+                        >
+                          <div className="md-transaction-icon">
+                            {categoryIcon(expense.category)}
+                          </div>
+
+                          <div className="md-transaction-info">
+                            <h3>{expense.title}</h3>
+                            <p>
+                              Paid by{" "}
+                              {expense.paidBy_UserId === group.createdBy
+                                ? "Admin"
+                                : "Member"}
+                            </p>
+                            <small>
+                              {new Date(expense.expenseDate).toLocaleDateString(
+                                "en-PH",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                },
+                              )}
+                            </small>
+                          </div>
+
+                          <div className="md-transaction-amount">
+                            <strong>
+                              {formatPeso(Number(expense.totalAmount))}
+                            </strong>
+                            <span>{expense.category ?? "Other"}</span>
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
                 </section>
               )}
             </>
@@ -272,21 +478,197 @@ export default function GroupDetailsPage() {
         )}
       </div>
 
+      {/* Expense Details and Delete Confirmation */}
+      {selectedExpense && (
+        <div
+          className={`md-sheet-overlay ${expenseSheetClosing ? "md-sheet-closing" : ""}`}
+          onClick={() => {
+            if (!deletingExpense) closeExpenseDetails();
+          }}
+        >
+          <section
+            className="md-expense-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              showDeleteConfirm ? "Confirm delete expense" : "Expense details"
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="md-sheet-handle" />
+
+            {showDeleteConfirm ? (
+              <div className="md-delete-content">
+                <div className="md-delete-icon" aria-hidden="true">
+                  🗑
+                </div>
+                <h2 className="md-delete-title">
+                  Delete &quot;{selectedExpense.title}&quot;?
+                </h2>
+                <p className="md-delete-description">
+                  Are you sure you want to delete{" "}
+                  <strong>
+                    {formatPeso(Number(selectedExpense.totalAmount))}
+                  </strong>{" "}
+                  from {group?.name}? This action cannot be undone.
+                </p>
+
+                {expenseActionError && (
+                  <p className="md-sheet-error" role="alert">
+                    {expenseActionError}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  className="md-delete-confirm"
+                  onClick={deleteSelectedExpense}
+                  disabled={deletingExpense}
+                >
+                  {deletingExpense ? "Deleting..." : "Delete Expense"}
+                </button>
+                <button
+                  type="button"
+                  className="md-delete-cancel"
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setExpenseActionError("");
+                  }}
+                  disabled={deletingExpense}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="md-sheet-header">
+                  <button type="button" onClick={closeExpenseDetails}>
+                    Close
+                  </button>
+                  <strong>Expense</strong>
+                  <span />
+                </div>
+
+                <div className="md-sheet-expense-heading">
+                  <div className="md-sheet-category-icon">
+                    {categoryIcon(selectedExpense.category)}
+                  </div>
+                  <div>
+                    <h2>{selectedExpense.title}</h2>
+                    <p>{group?.name}</p>
+                  </div>
+                </div>
+
+                <div className="md-sheet-amount-card">
+                  <div>
+                    <span>Expense amount</span>
+                    <strong>
+                      {formatPeso(Number(selectedExpense.totalAmount))}
+                    </strong>
+                  </div>
+                  <span className="md-sheet-category">
+                    {selectedExpense.category ?? "Other"}
+                  </span>
+                </div>
+
+                <div className="md-sheet-information">
+                  <div>
+                    <span>Paid by</span>
+                    <strong>
+                      {selectedExpense.paidBy_UserId === group?.createdBy
+                        ? "Group creator"
+                        : "Group member"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Date</span>
+                    <strong>
+                      {new Date(selectedExpense.expenseDate).toLocaleDateString(
+                        "en-PH",
+                      )}
+                    </strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="md-sheet-delete-button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  Delete Expense
+                </button>
+              </>
+            )}
+          </section>
+        </div>
+      )}
+
+      {addedExpense && (
+        <div className="md-expense-notice" role="status">
+          <span className="md-notice-check" aria-hidden="true">
+            ✓
+          </span>
+          <div className="md-notice-body">
+            <strong>Expense added</strong>
+            <span>
+              {addedExpense.title} ·{" "}
+              {formatPeso(Number(addedExpense.totalAmount))}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="md-notice-view"
+            onClick={() => {
+              openExpenseDetails(addedExpense);
+              setAddedExpense(null);
+            }}
+          >
+            View
+          </button>
+          <button
+            type="button"
+            className="md-notice-dismiss"
+            aria-label="Dismiss notification"
+            onClick={() => setAddedExpense(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {!addedExpense && expenseNotice && (
+        <div className="md-expense-notice" role="status">
+          <span className="md-notice-check" aria-hidden="true">
+            ✓
+          </span>
+          <div className="md-notice-body">
+            <strong>{expenseNotice}</strong>
+          </div>
+          <button
+            type="button"
+            className="md-notice-dismiss"
+            aria-label="Dismiss notification"
+            onClick={() => setExpenseNotice("")}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <nav className="md-bottom" aria-label="Main navigation">
         <div className="md-bottom-pill">
           <Link href="/dashboard">
-            <span>⌂</span>
-            Home
+            <Image src="/icons/home.png" alt="" width={20} height={20} />
+            <span>Home</span>
           </Link>
 
           <Link href="/groups" className="active" aria-current="page">
-            <span>♧</span>
-            Groups
+            <Image src="/icons/group.png" alt="" width={20} height={20} />
+            <span>Groups</span>
           </Link>
 
           <Link href="/history">
-            <span>◷</span>
-            History
+            <Image src="/icons/clock.png" alt="" width={20} height={20} />
+            <span>History</span>
           </Link>
         </div>
 
@@ -294,9 +676,10 @@ export default function GroupDetailsPage() {
           type="button"
           className="md-plus"
           onClick={openAddExpense}
-          aria-label="Add expense to this group"
+          aria-label="Add expense"
+          title="Add expense"
         >
-          +
+          <Image src="/icons/plus.png" alt="" width={24} height={24} />
         </button>
       </nav>
     </main>

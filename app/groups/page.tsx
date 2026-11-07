@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import "./groups-enhanced.css";
 import "./groups-navigation.css";
+import "./groups-compact-navigation.css";
+import GroupsSkeleton from "@/components/GroupSkeleton";
 
 // ==========================================
 // CUSTOM ICON COMPONENT
@@ -49,6 +51,7 @@ function CustomIcon({ name, size = 20, className = "" }: CustomIconProps) {
 
 export default function GroupsPage() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -61,6 +64,7 @@ export default function GroupsPage() {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createGroupError, setCreateGroupError] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(true);
+  const [initialPageLoading, setInitialPageLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
   const [refreshGroups, setRefreshGroups] = useState(0);
   const [activeFilter, setActiveFilter] = useState("All");
@@ -145,6 +149,18 @@ export default function GroupsPage() {
   }
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    let active = true;
+
+    setLoadingGroups(true);
+
     async function loadGroups() {
       const supabase = createClient();
 
@@ -153,22 +169,35 @@ export default function GroupsPage() {
         error: userError,
       } = await supabase.auth.getUser();
 
+      if (!active) return;
+
       if (userError || !user) {
         setLoadingGroups(false);
+        setInitialPageLoading(false);
         return;
       }
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("Group")
         .select("groupId, name, createdAt")
         .eq("createdBy", user.id)
-        .eq("isArchived", false)
-        .order("createdAt", { ascending: false });
+        .eq("isArchived", false);
+
+      if (debouncedSearch) {
+        query = query.ilike("name", `%${debouncedSearch}%`);
+      }
+
+      const { data, error } = await query.order("createdAt", {
+        ascending: false,
+      });
+
+      if (!active) return;
 
       if (error) {
         console.error("Error loading groups:", error.message);
         setGroupsError(error.message);
         setLoadingGroups(false);
+        setInitialPageLoading(false);
         return;
       }
 
@@ -187,16 +216,31 @@ export default function GroupsPage() {
       setGroupsError("");
       setGroups(savedGroups);
       setLoadingGroups(false);
+      setInitialPageLoading(false);
     }
 
-    loadGroups();
-  }, [refreshGroups]);
+    void loadGroups();
 
+    return () => {
+      active = false;
+    };
+  }, [refreshGroups, debouncedSearch]);
+  if (initialPageLoading) {
+    return (
+      <main className="manemi-groups-page">
+        <div className="groups-page-content">
+          <div className="manemi-groups-skeleton-container">
+            <GroupsSkeleton />
+          </div>
+        </div>
+      </main>
+    );
+  }
   return (
     <main className="manemi-groups-page">
       <div className="groups-page-content">
         {/* HEADER */}
-        {groups.length > 0 && !loadingGroups ? (
+        {loadingGroups || groups.length > 0 || Boolean(search) ? (
           <>
             <header className="manemi-rich-header">
               <div className="manemi-rich-avatar" aria-label="Account">
@@ -243,27 +287,32 @@ export default function GroupsPage() {
               <h1>Groups</h1>
               <p>Manage peer-to-peer debts within your circles.</p>
             </div>
-            <section
-              className="manemi-rich-balances"
-              aria-label="Global balances"
-            >
-              <h2>GLOBAL BALANCES</h2>
-              <div className="manemi-rich-balance-grid">
-                <div className="manemi-rich-balance-box">
-                  <span>Total collectible</span>
-                  <strong className="manemi-rich-green">₱0.00</strong>
-                  <small>Owed to you</small>
-                </div>
-                <div className="manemi-rich-balance-box">
-                  <span>Total debt</span>
-                  <strong className="manemi-rich-red">₱0.00</strong>
-                  <small>You owe</small>
-                </div>
-              </div>
-              <p className="manemi-rich-placeholder">
-                Balances will update when expense calculations are connected.
-              </p>
-            </section>
+            {
+              <>
+                <section
+                  className="manemi-rich-balances"
+                  aria-label="Global balances"
+                >
+                  <h2>GLOBAL BALANCES</h2>
+                  <div className="manemi-rich-balance-grid">
+                    <div className="manemi-rich-balance-box">
+                      <span>Total collectible</span>
+                      <strong className="manemi-rich-green">₱0.00</strong>
+                      <small>Owed to you</small>
+                    </div>
+                    <div className="manemi-rich-balance-box">
+                      <span>Total debt</span>
+                      <strong className="manemi-rich-red">₱0.00</strong>
+                      <small>You owe</small>
+                    </div>
+                  </div>
+                  <p className="manemi-rich-placeholder">
+                    Balances will update when expense calculations are
+                    connected.
+                  </p>
+                </section>
+              </>
+            }
             <div className="manemi-rich-filter-list" aria-label="Filter groups">
               {["All", ...categories.map((category) => category.name)].map(
                 (category) => (
@@ -285,7 +334,10 @@ export default function GroupsPage() {
                 type="search"
                 placeholder="Search your groups"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setLoadingGroups(true);
+                }}
               />
             </div>
           </>
@@ -346,8 +398,24 @@ export default function GroupsPage() {
           </p>
         )}
         {loadingGroups ? (
-          <p>Loading groups...</p>
-        ) : groups.length === 0 ? (
+          <section className="manemi-rich-group-section">
+            <h2>ACTIVE GROUPS</h2>
+            <div className="manemi-rich-group-grid" aria-busy="true">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <article
+                  key={index}
+                  className="manemi-rich-group-card"
+                  aria-hidden="true"
+                >
+                  <div className="manemi-card-skeleton-icon" />
+                  <div className="manemi-card-skeleton-title" />
+                  <div className="manemi-card-skeleton-text" />
+                  <div className="manemi-card-skeleton-balance" />
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : groups.length === 0 && !search ? (
           <section className="groups-empty-state">
             <div className="groups-empty-icon-circle">
               <CustomIcon
@@ -391,78 +459,69 @@ export default function GroupsPage() {
                 Categories are not saved yet. Choose All to see every group.
               </p>
             )}
+            {groups.length === 0 && search && (
+              <p className="manemi-rich-filter-note">
+                No groups match your search.
+              </p>
+            )}
             <div className="manemi-rich-group-grid">
-              {(activeFilter === "All" ? groups : [])
-                .filter((group) =>
-                  group.name.toLowerCase().includes(search.toLowerCase()),
-                )
-                .map((group) => (
-                  <article
-                    className="manemi-rich-group-card"
-                    key={group.id}
-                    onClick={() => router.push(`/groups/${group.id}`)}
-                    onKeyDown={(event) => {
-                      if (
-                        event.target === event.currentTarget &&
-                        (event.key === "Enter" || event.key === " ")
-                      ) {
-                        event.preventDefault();
-                        router.push(`/groups/${group.id}`);
-                      }
-                    }}
-                    role="link"
-                    tabIndex={0}
-                    aria-label={`Open ${group.name} details`}
-                  >
-                    <div className="manemi-rich-card-top">
-                      <span
-                        className="manemi-rich-group-emoji"
-                        aria-hidden="true"
+              {(activeFilter === "All" ? groups : []).map((group) => (
+                <article
+                  className="manemi-rich-group-card"
+                  key={group.id}
+                  onClick={() => router.push(`/groups/${group.id}`)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.target === event.currentTarget &&
+                      (event.key === "Enter" || event.key === " ")
+                    ) {
+                      event.preventDefault();
+                      router.push(`/groups/${group.id}`);
+                    }
+                  }}
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Open ${group.name} details`}
+                >
+                  <div className="manemi-rich-card-top">
+                    <span
+                      className="manemi-rich-group-emoji"
+                      aria-hidden="true"
+                    >
+                      {group.emoji}
+                    </span>
+                    <div className="manemi-rich-card-menu-wrap">
+                      <button
+                        type="button"
+                        className="manemi-rich-dots"
+                        aria-label={`Options for ${group.name}`}
+                        aria-expanded={groupMenu === group.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setGroupMenu(
+                            groupMenu === group.id ? null : group.id,
+                          );
+                        }}
                       >
-                        {group.emoji}
-                      </span>
-                      <div className="manemi-rich-card-menu-wrap">
-                        <button
-                          type="button"
-                          className="manemi-rich-dots"
-                          aria-label={`Options for ${group.name}`}
-                          aria-expanded={groupMenu === group.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setGroupMenu(
-                              groupMenu === group.id ? null : group.id,
-                            );
-                          }}
-                        >
-                          •••
-                        </button>
-                        {groupMenu === group.id && (
-                          <div className="manemi-rich-card-popover">
-                            <span>More group actions coming soon</span>
-                          </div>
-                        )}
-                      </div>
+                        •••
+                      </button>
+                      {groupMenu === group.id && (
+                        <div className="manemi-rich-card-popover">
+                          <span>More group actions coming soon</span>
+                        </div>
+                      )}
                     </div>
-                    <h3>{group.name}</h3>
-                    <p className="manemi-rich-members">
-                      Created by you · Admin
-                    </p>
-                    <div className="manemi-rich-card-balance">
-                      <span>Balance not available yet</span>
-                      <strong>₱0.00</strong>
-                      <small>Expense tracking coming soon</small>
-                    </div>
-                  </article>
-                ))}
+                  </div>
+                  <h3>{group.name}</h3>
+                  <p className="manemi-rich-members">Created by you · Admin</p>
+                  <div className="manemi-rich-card-balance">
+                    <span>Balance not available yet</span>
+                    <strong>₱0.00</strong>
+                    <small>Expense tracking coming soon</small>
+                  </div>
+                </article>
+              ))}
             </div>
-            {activeFilter === "All" &&
-              groups.filter((group) =>
-                group.name.toLowerCase().includes(search.toLowerCase()),
-              ).length === 0 && (
-                <p className="manemi-rich-filter-note">
-                  No groups match your search.
-                </p>
-              )}
             <button
               type="button"
               className="manemi-rich-create-another"
@@ -508,7 +567,7 @@ export default function GroupsPage() {
 
         <button
           type="button"
-          className="groups-nav-add"
+          className="groups-nav-add manemi-groups-add-button"
           aria-label="Add expense"
           onClick={() => setShowAddModal(true)}
         >

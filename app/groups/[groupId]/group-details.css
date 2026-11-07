@@ -500,3 +500,737 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+.md-expenses-section {
+  margin-top: 18px;
+  padding-bottom: 110px;
+}
+
+.md-tabs {
+  display: flex;
+  background: #242329;
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.md-tabs button {
+  flex: 1;
+  padding: 11px;
+  border: none;
+  background: transparent;
+  color: #aaa6b4;
+  border-radius: 9px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.md-tabs button.active {
+  background: #37343f;
+  color: white;
+}
+
+.md-categories {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 22px;
+  scrollbar-width: none;
+}
+
+.md-categories::-webkit-scrollbar {
+  display: none;
+}
+
+.md-categories button {
+  flex-shrink: 0;
+  border: 1px solid #35323c;
+  border-radius: 30px;
+  padding: 9px 13px;
+  background: #242329;
+  color: #c6c2ce;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.md-categories button.active {
+  background: #8d2cf5;
+  border-color: #8d2cf5;
+  color: white;
+}
+
+.md-transactions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.md-transaction-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1c1b21;
+  border: 1px solid #2d2b34;
+  border-radius: 16px;
+  padding: 15px 12px;
+}
+
+.md-transaction-icon {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #292730;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.md-transaction-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.md-transaction-info h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.md-transaction-info p {
+  margin: 0;
+  font-size: 12px;
+  color: #b5b0bd;
+}
+
+.md-transaction-info small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #85808e;
+}
+
+.md-transaction-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.md-transaction-amount strong {
+  font-size: 14px;
+  color: #fff;
+}
+
+.md-transaction-amount span {
+  background: #392b4a;
+  color: #d2a5ff;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.md-no-transactions {
+  text-align: center;
+  color: #a9a4b0;
+  padding: 30px 10px;
+}
+
+/* Group summary skeleton: three equal columns */
+.md-skeleton-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #3a3343;
+}
+
+.md-skeleton-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+}
+
+.md-skeleton-stat .manemi-skeleton {
+  max-width: 100%;
+}
+/* Compact bottom navigation */
+
+.md-bottom {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  padding: 0;
+  background: transparent;
+  z-index: 100;
+}
+
+.md-bottom-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 190px;
+  padding: 4px;
+  border: 1px solid #3b3943;
+  border-radius: 999px;
+  background: #242329;
+}
+
+.md-bottom-pill a {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 999px;
+  color: #aaa7b2;
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.md-bottom-pill a span {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.md-bottom-pill a.active {
+  background: #9333ea;
+  color: #fff;
+}
+/* Match the main Groups navigation icons */
+
+.md-bottom-pill a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.md-bottom-pill a img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.md-bottom-pill a span {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+/* Compact navigation with Add Expense button */
+
+.md-bottom {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 0;
+  background: transparent;
+  z-index: 100;
+}
+
+.md-bottom-pill {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 190px;
+  padding: 4px;
+  border: 1px solid #3b3943;
+  border-radius: 999px;
+  background: #242329;
+}
+
+.md-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  flex: 0 0 48px;
+
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+
+  background: #9333ea;
+  color: white;
+  cursor: pointer;
+
+  box-shadow: 0 4px 16px rgba(147, 51, 234, 0.3);
+}
+
+.md-plus img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.md-plus:hover {
+  background: #a855f7;
+}
+
+.md-plus:active {
+  transform: scale(0.95);
+}
+
+/* =========================================
+   EXPENSE DETAILS BOTTOM SHEET
+========================================= */
+
+.md-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  background: rgba(0, 0, 0, 0.78);
+  animation: mdOverlayFadeIn 250ms ease both;
+}
+
+.md-expense-sheet {
+  width: 100%;
+  max-width: 680px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+
+  padding: 16px 24px max(32px, env(safe-area-inset-bottom));
+
+  background: #1d1c22;
+  border: 1px solid #424049;
+  border-bottom: none;
+  border-radius: 30px 30px 0 0;
+  color: #f5f4f8;
+
+  box-shadow: 0 -15px 50px rgba(0, 0, 0, 0.4);
+
+  animation: mdSheetSlideUp 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Small handle at the top */
+
+.md-sheet-handle {
+  width: 48px;
+  height: 5px;
+  background: #56535e;
+  border-radius: 20px;
+  margin: 0 auto 26px;
+}
+
+/* Header */
+
+.md-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.md-sheet-header button {
+  border: none;
+  background: transparent;
+  color: #c38fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.md-sheet-header strong {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.md-sheet-header span {
+  width: 45px;
+}
+
+/* Expense title and icon */
+
+.md-sheet-expense-heading {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.md-sheet-category-icon {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #29272f;
+  border-radius: 18px;
+  font-size: 30px;
+}
+
+.md-sheet-expense-heading h2 {
+  margin: 0 0 6px;
+  font-size: 23px;
+  font-weight: 700;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.md-sheet-expense-heading p {
+  margin: 0;
+  font-size: 13px;
+  color: #aaa7b2;
+}
+
+/* Expense amount */
+
+.md-sheet-amount-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 20px;
+  margin-bottom: 24px;
+
+  background: #25242b;
+  border: 1px solid #39363f;
+  border-radius: 19px;
+}
+
+.md-sheet-amount-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.md-sheet-amount-card > div > span {
+  color: #aaa7b2;
+  font-size: 13px;
+}
+
+.md-sheet-amount-card strong {
+  font-size: clamp(22px, 6vw, 34px);
+  font-weight: 750;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.md-sheet-category {
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: #483627;
+  color: #ffc16c;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+/* Payer and date information */
+
+.md-sheet-information {
+  background: #25242b;
+  border: 1px solid #38353f;
+  border-radius: 18px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.md-sheet-information > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+}
+
+.md-sheet-information > div + div {
+  border-top: 1px solid #38353f;
+}
+
+.md-sheet-information span {
+  color: #aaa7b2;
+  font-size: 14px;
+}
+
+.md-sheet-information strong {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Delete expense button */
+
+.md-sheet-delete-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-height: 58px;
+
+  background: #3b252b;
+  border: 1px solid #60363c;
+  border-radius: 16px;
+
+  color: #ff696f;
+  font-size: 17px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.md-sheet-delete-button:hover {
+  background: #4c2b32;
+}
+
+.md-sheet-delete-button:active {
+  transform: scale(0.98);
+}
+
+/* Smooth animations */
+
+@keyframes mdOverlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mdSheetSlideUp {
+  from {
+    opacity: 0.8;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Closing animations */
+
+.md-sheet-closing {
+  animation: mdOverlayFadeIn 220ms ease reverse both;
+}
+
+.md-sheet-closing .md-expense-sheet {
+  animation: mdSheetSlideUp 220ms ease reverse both;
+}
+
+/* Mobile adjustments */
+
+@media (max-width: 480px) {
+  .md-expense-sheet {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .md-sheet-expense-heading h2 {
+    font-size: 21px;
+  }
+}
+
+/* Accessibility */
+
+@media (prefers-reduced-motion: reduce) {
+  .md-sheet-overlay,
+  .md-expense-sheet,
+  .md-sheet-closing,
+  .md-sheet-closing .md-expense-sheet {
+    animation: none;
+  }
+}
+
+/* Delete expense confirmation */
+
+.md-delete-content {
+  text-align: center;
+  padding: 12px 0 8px;
+}
+
+.md-delete-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin: 10px auto 26px;
+  border-radius: 50%;
+  background: #41272d;
+  color: #ff686e;
+  font-size: 36px;
+}
+
+.md-delete-title {
+  margin: 0 0 18px;
+  color: #ffffff;
+  font-size: 25px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.md-delete-description {
+  margin: 0 0 30px;
+  color: #aaa7b2;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.md-delete-description strong {
+  color: #ffffff;
+}
+
+.md-delete-confirm,
+.md-delete-cancel {
+  display: block;
+  width: 100%;
+  min-height: 58px;
+  border-radius: 15px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.md-delete-confirm {
+  margin-bottom: 12px;
+  border: none;
+  background: #e84750;
+  color: #ffffff;
+}
+
+.md-delete-confirm:hover {
+  background: #f0555e;
+}
+
+.md-delete-cancel {
+  border: 1px solid #48454e;
+  background: #29282f;
+  color: #ffffff;
+}
+
+.md-delete-confirm:disabled,
+.md-delete-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.md-sheet-error {
+  margin-bottom: 16px;
+  color: #ff858a;
+  font-size: 13px;
+}
+/* Add Expense success notification (append to group-details.css) */
+.md-expense-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 94px;
+  transform: translateX(-50%);
+  z-index: 400;
+  width: min(440px, calc(100% - 32px));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 14px;
+  background: #302e36;
+  color: #fff;
+  border: 1px solid #55515d;
+  border-radius: 18px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  animation: mdNoticeAppear 260ms ease-out both;
+}
+.md-notice-check {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #294638;
+  color: #48e6a1;
+  font-size: 20px;
+  font-weight: 700;
+}
+.md-notice-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.md-notice-body strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+.md-notice-body span {
+  color: #c6c1cd;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.md-notice-view,
+.md-notice-dismiss {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.md-notice-view {
+  color: #c18bff;
+  font-size: 14px;
+  font-weight: 700;
+}
+.md-notice-dismiss {
+  color: #aaa4b3;
+  font-size: 21px;
+  padding: 0 2px;
+}
+@keyframes mdNoticeAppear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 15px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-expense-notice {
+    animation: none;
+  }
+}

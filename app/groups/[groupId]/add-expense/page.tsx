@@ -174,7 +174,7 @@ export default function AddExpensePage() {
       const categoryMap: Record<Category, string> = {
         Food: "food",
         Transport: "transport",
-        Lodging: "accomodation",
+        Lodging: "lodging",
         Shopping: "shopping",
         Other: "other",
       };
@@ -250,7 +250,21 @@ export default function AddExpensePage() {
         throw new Error(data.error);
       }
 
-      router.replace(`/groups/${group.groupId}`);
+      // Only announce success after the Edge Function confirms creation.
+      // The returned ID lets Group Details locate the exact saved expense.
+      const createdExpenseId =
+        data?.expense?.expenseId ??
+        data?.data?.expense?.expenseId ??
+        data?.expenseId ??
+        null;
+      const destination = new URLSearchParams();
+      if (typeof createdExpenseId === "string" && createdExpenseId) {
+        destination.set("expenseAdded", createdExpenseId);
+      }
+
+      router.replace(
+        `/groups/${group.groupId}${destination.size ? `?${destination.toString()}` : ""}`,
+      );
       router.refresh();
     } catch (err) {
       setSaveError(
@@ -281,7 +295,7 @@ export default function AddExpensePage() {
           >
             Cancel
           </button>
-          <h1>Add Expense</h1>
+          <h1>Add Expense TEST123</h1>
           <span aria-hidden="true" />
         </header>
         {loading ? (
