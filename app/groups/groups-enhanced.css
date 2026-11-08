@@ -358,3 +358,20 @@
   max-width: none;
   box-sizing: border-box;
 }
+/* ==========================================
+   GROUP SECTION SPACING
+   Active / Settled / Unsettled
+   ========================================== */
+
+.manemi-rich-group-section + .manemi-rich-group-section {
+  margin-top: 32px;
+}
+
+.manemi-rich-group-section > h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.manemi-rich-group-grid {
+  margin-bottom: 0;
+}

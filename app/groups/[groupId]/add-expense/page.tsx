@@ -1,111 +1,217 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import { useParams, useRouter } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/client";
+
 import "./add-expense.css";
 
 type Group = { groupId: string; name: string; createdBy: string };
+
 type Member = { id: string; name: string };
+
 type SplitMode = "equally" | "exact" | "percent";
+
 type Category = "Food" | "Transport" | "Lodging" | "Shopping" | "Other";
 
 const categories: { name: Category; icon: string }[] = [
   { name: "Food", icon: "🍔" },
+
   { name: "Transport", icon: "🚕" },
+
   { name: "Lodging", icon: "🏨" },
+
   { name: "Shopping", icon: "🛍️" },
+
   { name: "Other", icon: "📦" },
 ];
+
 const money = (cents: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(
     cents / 100,
   );
+
 const parseCents = (value: string) => {
   const number = Number(value);
+
   return Number.isFinite(number) && number >= 0 ? Math.round(number * 100) : 0;
 };
+
 const initials = (name: string) => name.trim().charAt(0).toUpperCase() || "?";
 
 export default function AddExpensePage() {
   const router = useRouter();
+
   const params = useParams<{ groupId: string }>();
+
   const [group, setGroup] = useState<Group | null>(null);
+
   const [members, setMembers] = useState<Member[]>([]);
+
   const [userId, setUserId] = useState("");
+
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
+
   const [saving, setSaving] = useState(false);
+
   const [saveError, setSaveError] = useState("");
+
   const [amount, setAmount] = useState("");
+
   const [title, setTitle] = useState("");
+
   const [payerId, setPayerId] = useState("");
+
   const [date, setDate] = useState(() => {
     const now = new Date();
+
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   });
+
   const [category, setCategory] = useState<Category>("Food");
+
   const [mode, setMode] = useState<SplitMode>("equally");
+
   const [selected, setSelected] = useState<string[]>([]);
+
   const [entries, setEntries] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let alive = true;
+
     async function load() {
       const supabase = createClient();
+
       const { data: auth, error: authError } = await supabase.auth.getUser();
+
       if (!alive) return;
+
       if (authError || !auth.user) {
         setError("Please log in to add an expense.");
+
+        setLoading(false);
+
+        return;
+      }
+
+      // Confirm membership rather than requiring group ownership.
+      const { data: membership, error: membershipError } = await supabase
+        .from("Group_Member")
+        .select("userId")
+        .eq("groupId", params.groupId)
+        .eq("userId", auth.user.id)
+        .maybeSingle();
+
+      if (!alive) return;
+      if (membershipError || !membership) {
+        setError(
+          membershipError?.message || "You are not a member of this group.",
+        );
         setLoading(false);
         return;
       }
+
       const { data, error: groupError } = await supabase
         .from("Group")
         .select("groupId, name, createdBy")
         .eq("groupId", params.groupId)
-        .eq("createdBy", auth.user.id)
         .eq("isArchived", false)
         .maybeSingle();
+
       if (!alive) return;
       if (groupError || !data) {
         setError(groupError?.message || "Group not found or access denied.");
         setLoading(false);
         return;
       }
-      // Only the authenticated creator is loaded here. Once Group_Member and User
-      // columns/RLS are confirmed, replace this with the real member roster.
+
+      const { data: roster, error: rosterError } = await supabase
+        .from("Group_Member")
+        .select("userId")
+        .eq("groupId", params.groupId);
+
+      if (!alive) return;
+      if (rosterError || !roster) {
+        setError(rosterError?.message || "Unable to load group members.");
+        setLoading(false);
+        return;
+      }
+
+      const memberIds = [
+        ...new Set(roster.map((item) => item.userId as string)),
+      ];
+      if (!memberIds.includes(auth.user.id)) {
+        setError("You are not a member of this group.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: profiles, error: profileError } = await supabase
+        .from("User")
+        .select("userId, name")
+        .in("userId", memberIds);
+
+      if (!alive) return;
+      if (profileError) {
+        setError(`Unable to load member names: ${profileError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      const profileNames = new Map(
+        (profiles ?? []).map((profile) => [
+          profile.userId as string,
+          profile.name as string | null,
+        ]),
+      );
       const displayName =
         (auth.user.user_metadata?.full_name as string | undefined)?.trim() ||
         auth.user.email?.split("@")[0] ||
         "You";
-      const creator = { id: auth.user.id, name: displayName };
+      const groupMembers: Member[] = memberIds.map((id) => ({
+        id,
+        name:
+          profileNames.get(id)?.trim() ||
+          (id === auth.user.id ? displayName : "Group member"),
+      }));
+
       setGroup(data);
       setUserId(auth.user.id);
-      setMembers([creator]);
-      setSelected([creator.id]);
-      setPayerId(creator.id);
+      setMembers(groupMembers);
+      setSelected(memberIds);
+      setPayerId(auth.user.id);
       setLoading(false);
     }
+
     void load();
+
     return () => {
       alive = false;
     };
   }, [params.groupId]);
 
   const total = parseCents(amount);
+
   const split = useMemo(() => {
     const selectedMembers = members.filter((member) =>
       selected.includes(member.id),
     );
+
     const result: Record<string, number> = {};
+
     if (mode === "equally") {
       const base = selectedMembers.length
         ? Math.floor(total / selectedMembers.length)
         : 0;
+
       const remainder = selectedMembers.length
         ? total % selectedMembers.length
         : 0;
+
       selectedMembers.forEach((member, index) => {
         result[member.id] = base + (index < remainder ? 1 : 0);
       });
@@ -115,20 +221,27 @@ export default function AddExpensePage() {
       });
     } else {
       // Use integer basis points to avoid floating point percentage errors.
+
       selectedMembers.forEach((member) => {
         const pct = Number(entries[member.id] || 0);
+
         result[member.id] = Number.isFinite(pct)
           ? Math.round((total * pct) / 100)
           : 0;
       });
     }
+
     return result;
   }, [members, selected, total, mode, entries]);
 
   const assigned = Object.values(split).reduce((sum, cents) => sum + cents, 0);
+
   const percentageSum = members
+
     .filter((m) => selected.includes(m.id))
+
     .reduce((sum, m) => sum + Number(entries[m.id] || 0), 0);
+
   const invalidPercentage =
     mode === "percent" &&
     members.some(
@@ -138,28 +251,34 @@ export default function AddExpensePage() {
           Number(entries[m.id]) < 0 ||
           Number(entries[m.id]) > 100),
     );
+
   const validSplit =
     selected.length > 0 &&
     (mode === "equally" ||
       (mode === "exact"
         ? assigned === total
         : Math.abs(percentageSum - 100) < 0.000001 && !invalidPercentage));
+
   const formValid =
     total > 0 && title.trim().length > 0 && payerId.length > 0 && validSplit;
+
   const difference =
     mode === "percent" ? percentageSum - 100 : assigned - total;
+
   const unit = mode === "percent" ? "%" : "";
+
   const summary =
     mode === "equally"
       ? `Split equally · ${selected.length} ${selected.length === 1 ? "person" : "people"}`
       : mode === "percent"
-        ? `${percentageSum.toFixed(2).replace(/\.00$/, "")}% assigned`
+        ? `${percentageSum.toFixed(2).replace(/\.0+$/, "")}% assigned`
         : `${money(assigned)} of ${money(total)} assigned`;
 
   async function handleSaveExpense() {
     if (!formValid || !group || saving) return;
 
     setSaving(true);
+
     setSaveError("");
 
     try {
@@ -173,18 +292,25 @@ export default function AddExpensePage() {
 
       const categoryMap: Record<Category, string> = {
         Food: "food",
+
         Transport: "transport",
+
         Lodging: "lodging",
+
         Shopping: "shopping",
+
         Other: "other",
       };
 
       const participants = members
+
         .filter((member) => selected.includes(member.id))
+
         .map((member) => {
           if (mode === "exact") {
             return {
               userId: member.id,
+
               amount: split[member.id] / 100,
             };
           }
@@ -192,6 +318,7 @@ export default function AddExpensePage() {
           if (mode === "percent") {
             return {
               userId: member.id,
+
               percentage: Number(entries[member.id]),
             };
           }
@@ -203,22 +330,30 @@ export default function AddExpensePage() {
 
       const payload = {
         groupId: group.groupId,
+
         title: title.trim(),
+
         totalAmount: total / 100,
+
         category: categoryMap[category],
+
         splitType:
           mode === "equally"
             ? "equal"
             : mode === "percent"
               ? "percentage"
               : "exact",
+
         expenseDate,
+
         paidBy: payerId,
+
         participants,
       };
 
       const { data, error: functionError } = await supabase.functions.invoke(
         "create-expense",
+
         {
           body: payload,
         },
@@ -236,6 +371,7 @@ export default function AddExpensePage() {
         if (response) {
           try {
             const details = await response.clone().json();
+
             message =
               details.error || JSON.stringify(details.details || details);
           } catch {
@@ -251,13 +387,17 @@ export default function AddExpensePage() {
       }
 
       // Only announce success after the Edge Function confirms creation.
+
       // The returned ID lets Group Details locate the exact saved expense.
+
       const createdExpenseId =
         data?.expense?.expenseId ??
         data?.data?.expense?.expenseId ??
         data?.expenseId ??
         null;
+
       const destination = new URLSearchParams();
+
       if (typeof createdExpenseId === "string" && createdExpenseId) {
         destination.set("expenseAdded", createdExpenseId);
       }
@@ -265,6 +405,7 @@ export default function AddExpensePage() {
       router.replace(
         `/groups/${group.groupId}${destination.size ? `?${destination.toString()}` : ""}`,
       );
+
       router.refresh();
     } catch (err) {
       setSaveError(
@@ -287,6 +428,7 @@ export default function AddExpensePage() {
     <main className="ae-page">
       <section className="ae-sheet">
         <div className="ae-handle" aria-hidden="true" />
+
         <header className="ae-header">
           <button
             type="button"
@@ -295,9 +437,12 @@ export default function AddExpensePage() {
           >
             Cancel
           </button>
-          <h1>Add Expense TEST123</h1>
+
+          <h1>Add Expense</h1>
+
           <span aria-hidden="true" />
         </header>
+
         {loading ? (
           <p className="ae-state">Loading group...</p>
         ) : error ? (
@@ -309,8 +454,10 @@ export default function AddExpensePage() {
             <>
               <div className="ae-amount-block">
                 <label htmlFor="ae-amount">Amount</label>
+
                 <div className="ae-amount-input">
                   <span>₱</span>
+
                   <input
                     id="ae-amount"
                     type="number"
@@ -323,9 +470,11 @@ export default function AddExpensePage() {
                   />
                 </div>
               </div>
+
               <label className="ae-visually-hidden" htmlFor="ae-title">
                 What was it for?
               </label>
+
               <input
                 id="ae-title"
                 className="ae-title-input"
@@ -334,13 +483,17 @@ export default function AddExpensePage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
+
               <div className="ae-info-box">
                 <div className="ae-info-row">
                   <span>Group</span>
+
                   <strong>📦 {group.name}</strong>
                 </div>
+
                 <label className="ae-info-row" htmlFor="ae-payer">
                   <span>Paid by</span>
+
                   <select
                     id="ae-payer"
                     value={payerId}
@@ -353,8 +506,10 @@ export default function AddExpensePage() {
                     ))}
                   </select>
                 </label>
+
                 <label className="ae-info-row" htmlFor="ae-date">
                   <span>Date</span>
+
                   <input
                     id="ae-date"
                     type="date"
@@ -363,10 +518,13 @@ export default function AddExpensePage() {
                   />
                 </label>
               </div>
+
               <div className="ae-section-label">
                 <h2>Category</h2>
+
                 <span>Choose one</span>
               </div>
+
               <div className="ae-categories">
                 {categories.map((item) => (
                   <button
@@ -379,12 +537,15 @@ export default function AddExpensePage() {
                   </button>
                 ))}
               </div>
+
               <div className="ae-section-label">
                 <h2>Split</h2>
+
                 <span>
                   {selected.length} of {members.length} selected
                 </span>
               </div>
+
               <div className="ae-modes" role="group" aria-label="Split method">
                 <button
                   type="button"
@@ -393,6 +554,7 @@ export default function AddExpensePage() {
                 >
                   Equally
                 </button>
+
                 <button
                   type="button"
                   className={mode === "exact" ? "active" : ""}
@@ -400,6 +562,7 @@ export default function AddExpensePage() {
                 >
                   Exact ₱
                 </button>
+
                 <button
                   type="button"
                   className={mode === "percent" ? "active" : ""}
@@ -408,9 +571,11 @@ export default function AddExpensePage() {
                   Percent %
                 </button>
               </div>
+
               <div className="ae-member-list">
                 {members.map((member) => {
                   const included = selected.includes(member.id);
+
                   return (
                     <div className="ae-member-row" key={member.id}>
                       {mode === "equally" && (
@@ -423,15 +588,19 @@ export default function AddExpensePage() {
                           {included ? "✓" : ""}
                         </button>
                       )}
+
                       <span className="ae-avatar">{initials(member.name)}</span>
+
                       <div className="ae-member-name">
                         <strong>
                           {member.id === userId ? "You" : member.name}
                         </strong>
+
                         {mode !== "equally" && (
                           <small>{money(split[member.id] || 0)}</small>
                         )}
                       </div>
+
                       {mode === "equally" ? (
                         <strong className="ae-share">
                           {included ? money(split[member.id] || 0) : "Excluded"}
@@ -442,7 +611,9 @@ export default function AddExpensePage() {
                             {member.name}{" "}
                             {mode === "exact" ? "amount" : "percentage"}
                           </span>
+
                           {mode === "exact" && <span>₱</span>}
+
                           <input
                             type="number"
                             inputMode="decimal"
@@ -454,8 +625,10 @@ export default function AddExpensePage() {
                             onChange={(e) => {
                               setEntries((prev) => ({
                                 ...prev,
+
                                 [member.id]: e.target.value,
                               }));
+
                               setSelected((prev) =>
                                 prev.includes(member.id)
                                   ? prev
@@ -463,6 +636,7 @@ export default function AddExpensePage() {
                               );
                             }}
                           />
+
                           {mode === "percent" && <span>%</span>}
                         </label>
                       )}
@@ -470,6 +644,7 @@ export default function AddExpensePage() {
                   );
                 })}
               </div>
+
               {mode !== "equally" && total > 0 && (
                 <div
                   className={`ae-validation ${validSplit ? "valid" : "invalid"}`}
@@ -479,16 +654,18 @@ export default function AddExpensePage() {
                     {validSplit
                       ? "✓ Split adds up correctly."
                       : difference < 0
-                        ? `⚠ ${mode === "percent" ? `${Math.abs(difference).toFixed(2).replace(/\.00$/, "")}% still unassigned.` : `${money(-difference)} still unassigned.`}`
+                        ? `⚠ ${mode === "percent" ? `${Math.abs(difference).toFixed(2).replace(/\.0+$/, "")}% still unassigned.` : `${money(-difference)} still unassigned.`}`
                         : difference > 0
-                          ? `⚠ ${mode === "percent" ? `${difference.toFixed(2).replace(/\.00$/, "")}% over the total.` : `${money(difference)} over the expense total.`}`
+                          ? `⚠ ${mode === "percent" ? `${difference.toFixed(2).replace(/\.0+$/, "")}% over the total.` : `${money(difference)} over the expense total.`}`
                           : "⚠ Check the split amounts."}
                   </strong>
+
                   <span>
                     {validSplit
                       ? "Everyone's share is assigned."
                       : "Adjust the shares before saving."}
                   </span>
+
                   <div className="ae-progress">
                     <div
                       style={{
@@ -496,14 +673,17 @@ export default function AddExpensePage() {
                       }}
                     />
                   </div>
+
                   <small>
                     {summary}
+
                     {unit && difference !== 0
-                      ? ` · ${Math.abs(difference).toFixed(2).replace(/\.00$/, "")}${unit} ${difference < 0 ? "left" : "over"}`
+                      ? ` · ${Math.abs(difference).toFixed(2).replace(/\.0+$/, "")}${unit} ${difference < 0 ? "left" : "over"}`
                       : ""}
                   </small>
                 </div>
               )}
+
               <div className="ae-footer">
                 <p>
                   {!total || !title.trim()
@@ -512,6 +692,7 @@ export default function AddExpensePage() {
                       ? "Fix the split to continue"
                       : `${summary} · Ready to save`}
                 </p>
+
                 <button
                   type="button"
                   disabled={!formValid || saving}
@@ -519,6 +700,7 @@ export default function AddExpensePage() {
                 >
                   {saving ? "Saving Expense..." : "Save Expense"}
                 </button>
+
                 {saveError && (
                   <p role="alert" style={{ color: "#ff676d" }}>
                     {saveError}

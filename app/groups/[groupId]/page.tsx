@@ -14,6 +14,9 @@ type Group = {
   createdBy: string;
 };
 
+type GroupMember = { userId: string; name: string };
+type ExpenseSplit = { expenseId: string; userId: string };
+
 type Expense = {
   expenseId: string;
   paidBy_UserId: string;
@@ -35,7 +38,10 @@ export default function GroupDetailsPage() {
   const router = useRouter();
 
   const [group, setGroup] = useState<Group | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [members, setMembers] = useState<GroupMember[]>([]);
+  const [expenseSplits, setExpenseSplits] = useState<ExpenseSplit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,12 +74,32 @@ export default function GroupDetailsPage() {
         return;
       }
 
+      // Confirm the current user belongs to this group before loading it.
+      const { data: membership, error: membershipError } = await supabase
+        .from("Group_Member")
+        .select("userId")
+        .eq("groupId", params.groupId)
+        .eq("userId", auth.user.id)
+        .maybeSingle();
+
+      if (!active) return;
+      if (membershipError) {
+        setError(membershipError.message);
+        setLoading(false);
+        return;
+      }
+      if (!membership) {
+        setError("Group not found or you do not have access.");
+        setLoading(false);
+        return;
+      }
+
+      setCurrentUserId(auth.user.id);
+
       const { data, error: queryError } = await supabase
         .from("Group")
         .select("groupId, name, createdBy")
         .eq("groupId", params.groupId)
-        .eq("createdBy", auth.user.id)
-        .eq("isArchived", false)
         .maybeSingle();
 
       if (!active) return;
@@ -92,6 +118,55 @@ export default function GroupDetailsPage() {
 
       setGroup(data);
 
+      // Load the actual group roster and their display names.
+      const { data: memberRows, error: memberError } = await supabase
+        .from("Group_Member")
+        .select("userId")
+        .eq("groupId", params.groupId);
+
+      if (!active) return;
+      if (memberError) {
+        setError(`Unable to load group members: ${memberError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      const memberIds = [
+        ...new Set((memberRows ?? []).map((row) => row.userId as string)),
+      ];
+      let namesById = new Map<string, string>();
+      if (memberIds.length) {
+        const { data: users, error: usersError } = await supabase
+          .from("User")
+          .select("userId, name")
+          .in("userId", memberIds);
+        if (!active) return;
+        if (usersError) {
+          console.warn("Unable to load member names:", usersError.message);
+        } else {
+          namesById = new Map(
+            (users ?? []).map((user) => [
+              user.userId as string,
+              String(user.name || "").trim(),
+            ]),
+          );
+        }
+      }
+      setMembers(
+        memberIds.map((id) => ({
+          userId: id,
+          name:
+            namesById.get(id) ||
+            (id === auth.user.id
+              ? String(
+                  auth.user.user_metadata?.full_name ||
+                    auth.user.email?.split("@")[0] ||
+                    "You",
+                )
+              : "Unknown member"),
+        })),
+      );
+
       const { data: expenseData, error: expenseError } = await supabase
         .from("Expense")
         .select(
@@ -107,6 +182,25 @@ export default function GroupDetailsPage() {
         setError("Unable to load group expenses.");
       } else {
         setExpenses(expenseData ?? []);
+        const expenseIds = (expenseData ?? []).map((item) => item.expenseId);
+        if (expenseIds.length) {
+          const { data: splits, error: splitsError } = await supabase
+            .from("Expense_Split")
+            .select("expenseId, userId")
+            .in("expenseId", expenseIds);
+          if (!active) return;
+          if (splitsError) {
+            console.warn(
+              "Unable to load expense participants:",
+              splitsError.message,
+            );
+            setExpenseSplits([]);
+          } else {
+            setExpenseSplits(splits ?? []);
+          }
+        } else {
+          setExpenseSplits([]);
+        }
         // Read the saved expense ID after returning from Add Expense.
         // Match it against the database result, not a hardcoded title/amount.
         const paramsFromUrl = new URLSearchParams(window.location.search);
@@ -248,8 +342,30 @@ export default function GroupDetailsPage() {
     }
   };
 
-  // Temporary until group members are connected.
-  const memberCount = 1;
+  const memberCount = members.length;
+
+  const memberName = (id: string) =>
+    members.find((member) => member.userId === id)?.name || "Unknown member";
+
+  const splitBetween = (expenseId: string) => {
+    const participantIds = [
+      ...new Set(
+        expenseSplits
+          .filter((split) => split.expenseId === expenseId)
+          .map((split) => split.userId),
+      ),
+    ];
+    if (!participantIds.length) return "Participants unavailable";
+    // Everyone means every CURRENT group member participates.
+    if (
+      members.length > 0 &&
+      participantIds.length === members.length &&
+      members.every((member) => participantIds.includes(member.userId))
+    ) {
+      return "Everyone";
+    }
+    return participantIds.map(memberName).join(", ");
+  };
 
   const averagePerPerson = memberCount > 0 ? totalExpenses / memberCount : 0;
 
@@ -317,7 +433,9 @@ export default function GroupDetailsPage() {
                   <p>
                     {memberCount} member
                     {memberCount !== 1 ? "s" : ""} ·{" "}
-                    <span className="md-admin">Admin</span>
+                    <span className="md-admin">
+                      {group.createdBy === currentUserId ? "Admin" : "Member"}
+                    </span>
                   </p>
                 </div>
               </section>
@@ -443,12 +561,7 @@ export default function GroupDetailsPage() {
 
                           <div className="md-transaction-info">
                             <h3>{expense.title}</h3>
-                            <p>
-                              Paid by{" "}
-                              {expense.paidBy_UserId === group.createdBy
-                                ? "Admin"
-                                : "Member"}
-                            </p>
+                            <p>Paid by {memberName(expense.paidBy_UserId)}</p>
                             <small>
                               {new Date(expense.expenseDate).toLocaleDateString(
                                 "en-PH",
@@ -574,11 +687,11 @@ export default function GroupDetailsPage() {
                 <div className="md-sheet-information">
                   <div>
                     <span>Paid by</span>
-                    <strong>
-                      {selectedExpense.paidBy_UserId === group?.createdBy
-                        ? "Group creator"
-                        : "Group member"}
-                    </strong>
+                    <strong>{memberName(selectedExpense.paidBy_UserId)}</strong>
+                  </div>
+                  <div>
+                    <span>Split between</span>
+                    <strong>{splitBetween(selectedExpense.expenseId)}</strong>
                   </div>
                   <div>
                     <span>Date</span>
