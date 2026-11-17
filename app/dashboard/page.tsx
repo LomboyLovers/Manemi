@@ -1,82 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-
-type DashboardGroup = {
-  id: string | number;
-  name: string;
-  icon?: string;
-  category?: string;
-  members?: number | string;
-  owed?: number;
-  owe?: number;
-  spent?: number;
-  isAdmin?: boolean;
-};
-
-const peso = (value: number) =>
-  new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(
-    value,
-  );
-
-const numeric = (value: unknown): number => {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string")
-    return Number(value.replace(/[^\d.-]/g, "")) || 0;
-  return 0;
-};
-
-function readGroups(): DashboardGroup[] {
-  // Temporary browser-based group source. Use the same storage key in /groups,
-  // or replace this with your actual database/API once it is connected.
-  try {
-    const stored = window.localStorage.getItem("manemi-groups");
-    if (!stored) return [];
-    const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is DashboardGroup =>
-        !!item &&
-        typeof item === "object" &&
-        "id" in item &&
-        "name" in item &&
-        typeof item.name === "string",
-    );
-  } catch {
-    return [];
-  }
-}
+import AddExpensePicker from "@/components/AddExpensePicker";
+import {
+  loadGroupsData,
+  totalsFor,
+  type GroupSummary,
+} from "@/lib/manemi/groups";
+import { greeting, initialOf, isZero, peso } from "@/lib/manemi/format";
 
 export default function Dashboard() {
-  const [groups, setGroups] = useState<DashboardGroup[]>([]);
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [userName, setUserName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
-    const refresh = () => setGroups(readGroups());
-    refresh();
-    window.addEventListener("storage", refresh);
-    window.addEventListener("focus", refresh);
+    let active = true;
+    loadGroupsData(createClient())
+      .then((result) => {
+        if (!active || !result) return;
+        setUserName(result.user.name);
+        // Most recently active groups first.
+        setGroups(
+          [...result.groups].sort((a, b) =>
+            (b.lastActivityAt ?? b.createdAt).localeCompare(
+              a.lastActivityAt ?? a.createdAt,
+            ),
+          ),
+        );
+        if (result.warnings.length)
+          setLoadError(`Some details could not be loaded: ${result.warnings.join("; ")}`);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setLoadError(error instanceof Error ? error.message : "Unable to load your groups.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("focus", refresh);
+      active = false;
     };
   }, []);
 
-  const filteredGroups = groups.filter((group) =>
-    group.name.toLowerCase().includes(search.toLowerCase()),
-  );
-  const totalOwed = groups.reduce((sum, group) => sum + numeric(group.owed), 0);
-  const totalOwe = groups.reduce((sum, group) => sum + numeric(group.owe), 0);
-  const totalSpent = groups.reduce(
-    (sum, group) => sum + numeric(group.spent),
-    0,
-  );
+  const filteredGroups = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const recent = groups.filter((group) => !group.isArchived);
+    return query
+      ? recent.filter((group) => group.name.toLowerCase().includes(query))
+      : recent;
+  }, [groups, search]);
+  const totals = useMemo(() => totalsFor(groups), [groups]);
+  const closeAddPicker = useCallback(() => setShowAddModal(false), []);
   const router = useRouter();
 
   async function handleLogout() {
@@ -97,7 +80,7 @@ export default function Dashboard() {
     <main className="manemi-dashboard manemi-dashboard-v2">
       <div className="dashboard-content">
         <header className="dashboard-header">
-          <div className="dashboard-avatar">J</div>
+          <div className="dashboard-avatar">{initialOf(userName || "?")}</div>
           <div className="notification-wrapper">
             <button
               type="button"
@@ -126,9 +109,9 @@ export default function Dashboard() {
 
         <section className="dashboard-greeting" id="home">
           <h1>
-            Good evening,
+            {greeting()},
             <br />
-            Joaquin
+            {userName.split(" ")[0] || "there"}
           </h1>
           <p>Here&apos;s what&apos;s happening with your money.</p>
         </section>
@@ -155,6 +138,28 @@ export default function Dashboard() {
           />
         </label>
 
+        {loadError && (
+          <p className="dashboard-empty" role="alert">
+            {loadError}
+          </p>
+        )}
+
+        {loading && (
+          <p className="dashboard-empty" aria-busy="true">
+            Loading your groups…
+          </p>
+        )}
+
+        {!loading && groups.length === 0 && !loadError && (
+          <section className="dashboard-section">
+            <p className="dashboard-empty">
+              You&apos;re not in any groups yet.{" "}
+              <Link href="/groups">Create or join a group</Link> to start
+              splitting expenses.
+            </p>
+          </section>
+        )}
+
         {groups.length > 0 && (
           <>
             <section
@@ -168,22 +173,24 @@ export default function Dashboard() {
                     <span className="balance-positive">↙</span> Owed to you
                   </p>
                   <strong className="balance-positive">
-                    {peso(totalOwed)}
+                    {peso(totals.owedToYou)}
                   </strong>
                 </div>
                 <div className="dashboard-balance-tile">
                   <p>
                     <span className="balance-negative">↗</span> You owe
                   </p>
-                  <strong className="balance-negative">{peso(totalOwe)}</strong>
+                  <strong className="balance-negative">
+                    {peso(totals.youOwe)}
+                  </strong>
                 </div>
               </div>
               <div className="dashboard-balance-footer">
                 <span>
-                  Spent this month <b>{peso(totalSpent)}</b>
+                  Spent this month <b>{peso(totals.spentThisMonth)}</b>
                 </span>
                 <span>
-                  This week <b>{peso(0)}</b>
+                  This week <b>{peso(totals.spentThisWeek)}</b>
                 </span>
               </div>
             </section>
@@ -201,51 +208,55 @@ export default function Dashboard() {
               {filteredGroups.length > 0 ? (
                 <div className="groups-scroll">
                   {filteredGroups.map((group) => {
-                    const owed = numeric(group.owed);
-                    const owe = numeric(group.owe);
-                    const net = owed - owe;
+                    const net = group.net;
+                    const tone = isZero(net)
+                      ? "dashboard-group-status"
+                      : net > 0
+                        ? "dashboard-group-status balance-positive"
+                        : "dashboard-group-status balance-negative";
                     return (
-                      <article className="group-card" key={group.id}>
+                      <Link
+                        className="group-card"
+                        key={group.id}
+                        href={`/groups/${group.id}`}
+                        aria-label={`Open ${group.name}`}
+                      >
                         <div className="dashboard-group-card-top">
                           <span
                             className="dashboard-group-emoji"
                             aria-hidden="true"
                           >
-                            {group.icon ||
-                              (group.category === "Travel" ? "✈️" : "👥")}
-                          </span>
-                          <span
-                            className="dashboard-group-more"
-                            aria-hidden="true"
-                          >
-                            •••
+                            📦
                           </span>
                         </div>
                         <h3>{group.name}</h3>
                         <p className="group-members">
-                          {group.members ?? 1} members
-                          {group.isAdmin ? " · Admin" : ""}
+                          {group.members}{" "}
+                          {group.members === 1 ? "member" : "members"}
+                          {group.isCreator ? " · Admin" : ""}
                         </p>
-                        <p
-                          className={
-                            net >= 0
-                              ? "dashboard-group-status balance-positive"
-                              : "dashboard-group-status balance-negative"
-                          }
-                        >
-                          {net >= 0 ? "↙ You're owed" : "↗ You owe"}
+                        <p className={tone}>
+                          {isZero(net)
+                            ? "✓ Settled up"
+                            : net > 0
+                              ? "↙ You're owed"
+                              : "↗ You owe"}
                         </p>
                         <strong
                           className={
-                            net >= 0 ? "balance-positive" : "balance-negative"
+                            isZero(net)
+                              ? undefined
+                              : net > 0
+                                ? "balance-positive"
+                                : "balance-negative"
                           }
                         >
                           {peso(Math.abs(net))}
                         </strong>
                         <p className="dashboard-group-spent">
-                          of {peso(numeric(group.spent))} spent
+                          of {peso(group.spent)} spent
                         </p>
-                      </article>
+                      </Link>
                     );
                   })}
                 </div>
@@ -289,24 +300,11 @@ export default function Dashboard() {
       </nav>
 
       {showAddModal && (
-        <div
-          className="dashboard-modal-overlay"
-          onClick={() => setShowAddModal(false)}
-        >
-          <div
-            className="dashboard-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="dashboard-add-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="dashboard-add-title">Add Expense</h2>
-            <p>Your expense creation page will go here.</p>
-            <button type="button" onClick={() => setShowAddModal(false)}>
-              Close
-            </button>
-          </div>
-        </div>
+        <AddExpensePicker
+          groups={groups}
+          onClose={closeAddPicker}
+          onCreateGroup={() => router.push("/groups")}
+        />
       )}
     </main>
   );

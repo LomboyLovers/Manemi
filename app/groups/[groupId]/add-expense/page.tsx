@@ -6,13 +6,22 @@ import { useParams, useRouter } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 
+import {
+  computeShares,
+  convertSplit,
+  FULL_PERCENT_BPS,
+  hundredthsToInput,
+  sharesToBps,
+  toBps,
+  toCents,
+  type SplitMode,
+} from "@/lib/manemi/split";
+
 import "./add-expense.css";
 
 type Group = { groupId: string; name: string; createdBy: string };
 
 type Member = { id: string; name: string };
-
-type SplitMode = "equally" | "exact" | "percent";
 
 type Category = "Food" | "Transport" | "Lodging" | "Shopping" | "Other";
 
@@ -33,11 +42,7 @@ const money = (cents: number) =>
     cents / 100,
   );
 
-const parseCents = (value: string) => {
-  const number = Number(value);
-
-  return Number.isFinite(number) && number >= 0 ? Math.round(number * 100) : 0;
-};
+const parseCents = toCents;
 
 const initials = (name: string) => name.trim().charAt(0).toUpperCase() || "?";
 
@@ -98,45 +103,40 @@ export default function AddExpensePage() {
         return;
       }
 
-      // Confirm membership rather than requiring group ownership.
-      const { data: membership, error: membershipError } = await supabase
-        .from("Group_Member")
-        .select("userId")
-        .eq("groupId", params.groupId)
-        .eq("userId", auth.user.id)
-        .maybeSingle();
+      // Load the group and its roster together; the roster also confirms
+      // membership, so no separate membership round trip is needed.
+      const [groupResult, rosterResult] = await Promise.all([
+        supabase
+          .from("Group")
+          .select("groupId, name, createdBy")
+          .eq("groupId", params.groupId)
+          .eq("isArchived", false)
+          .maybeSingle(),
+        supabase
+          .from("Group_Member")
+          .select("userId")
+          .eq("groupId", params.groupId),
+      ]);
 
       if (!alive) return;
-      if (membershipError || !membership) {
-        setError(
-          membershipError?.message || "You are not a member of this group.",
-        );
-        setLoading(false);
-        return;
-      }
-
-      const { data, error: groupError } = await supabase
-        .from("Group")
-        .select("groupId, name, createdBy")
-        .eq("groupId", params.groupId)
-        .eq("isArchived", false)
-        .maybeSingle();
-
-      if (!alive) return;
-      if (groupError || !data) {
-        setError(groupError?.message || "Group not found or access denied.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: roster, error: rosterError } = await supabase
-        .from("Group_Member")
-        .select("userId")
-        .eq("groupId", params.groupId);
-
-      if (!alive) return;
+      const { data, error: groupError } = groupResult;
+      const { data: roster, error: rosterError } = rosterResult;
       if (rosterError || !roster) {
         setError(rosterError?.message || "Unable to load group members.");
+        setLoading(false);
+        return;
+      }
+      const me = auth.user;
+      if (!roster.some((item) => item.userId === me.id)) {
+        setError("You are not a member of this group.");
+        setLoading(false);
+        return;
+      }
+      if (groupError || !data) {
+        setError(
+          groupError?.message ||
+            "Group not found, archived, or you don't have access.",
+        );
         setLoading(false);
         return;
       }
@@ -176,7 +176,7 @@ export default function AddExpensePage() {
         id,
         name:
           profileNames.get(id)?.trim() ||
-          (id === auth.user.id ? displayName : "Group member"),
+          (id === me.id ? displayName : "Group member"),
       }));
 
       setGroup(data);
@@ -196,74 +196,56 @@ export default function AddExpensePage() {
 
   const total = parseCents(amount);
 
-  const split = useMemo(() => {
-    const selectedMembers = members.filter((member) =>
-      selected.includes(member.id),
-    );
-
-    const result: Record<string, number> = {};
-
-    if (mode === "equally") {
-      const base = selectedMembers.length
-        ? Math.floor(total / selectedMembers.length)
-        : 0;
-
-      const remainder = selectedMembers.length
-        ? total % selectedMembers.length
-        : 0;
-
-      selectedMembers.forEach((member, index) => {
-        result[member.id] = base + (index < remainder ? 1 : 0);
-      });
-    } else if (mode === "exact") {
-      selectedMembers.forEach((member) => {
-        result[member.id] = parseCents(entries[member.id] || "");
-      });
-    } else {
-      // Use integer basis points to avoid floating point percentage errors.
-
-      selectedMembers.forEach((member) => {
-        const pct = Number(entries[member.id] || 0);
-
-        result[member.id] = Number.isFinite(pct)
-          ? Math.round((total * pct) / 100)
-          : 0;
-      });
-    }
-
-    return result;
-  }, [members, selected, total, mode, entries]);
+  const split = useMemo(
+    () => computeShares(mode, total, { selected, entries }),
+    [mode, total, selected, entries],
+  );
 
   const assigned = Object.values(split).reduce((sum, cents) => sum + cents, 0);
 
-  const percentageSum = members
-
-    .filter((m) => selected.includes(m.id))
-
-    .reduce((sum, m) => sum + Number(entries[m.id] || 0), 0);
+  // Integer basis points (100% = 10000) avoid floating point drift.
+  const percentageBps = selected.reduce(
+    (sum, id) => sum + toBps(entries[id] ?? ""),
+    0,
+  );
+  const percentageSum = percentageBps / 100;
 
   const invalidPercentage =
     mode === "percent" &&
-    members.some(
-      (m) =>
-        selected.includes(m.id) &&
-        (!Number.isFinite(Number(entries[m.id])) ||
-          Number(entries[m.id]) < 0 ||
-          Number(entries[m.id]) > 100),
-    );
+    selected.some((id) => {
+      const value = Number(entries[id] || 0);
+      return !Number.isFinite(value) || value < 0 || value > 100;
+    });
 
   const validSplit =
     selected.length > 0 &&
     (mode === "equally" ||
       (mode === "exact"
         ? assigned === total
-        : Math.abs(percentageSum - 100) < 0.000001 && !invalidPercentage));
+        : percentageBps === FULL_PERCENT_BPS && !invalidPercentage));
+
+  // Percent of the total each member's exact amount represents.
+  const exactPercents = useMemo(
+    () => sharesToBps(total, selected, split),
+    [total, selected, split],
+  );
+
+  /** Switch split method, carrying the current shares over. */
+  function changeMode(next: SplitMode) {
+    if (next === mode) return;
+    const converted = convertSplit(mode, next, total, { selected, entries });
+    setSelected(converted.selected);
+    setEntries(converted.entries);
+    setMode(next);
+  }
 
   const formValid =
     total > 0 && title.trim().length > 0 && payerId.length > 0 && validSplit;
 
   const difference =
-    mode === "percent" ? percentageSum - 100 : assigned - total;
+    mode === "percent"
+      ? (percentageBps - FULL_PERCENT_BPS) / 100
+      : assigned - total;
 
   const unit = mode === "percent" ? "%" : "";
 
@@ -271,7 +253,7 @@ export default function AddExpensePage() {
     mode === "equally"
       ? `Split equally · ${selected.length} ${selected.length === 1 ? "person" : "people"}`
       : mode === "percent"
-        ? `${percentageSum.toFixed(2).replace(/\.0+$/, "")}% assigned`
+        ? `${hundredthsToInput(percentageBps) || "0"}% assigned`
         : `${money(assigned)} of ${money(total)} assigned`;
 
   async function handleSaveExpense() {
@@ -302,9 +284,17 @@ export default function AddExpensePage() {
         Other: "other",
       };
 
+      // People with a ₱0 / 0% share aren't part of this expense.
       const participants = members
 
-        .filter((member) => selected.includes(member.id))
+        .filter(
+          (member) =>
+            selected.includes(member.id) &&
+            (mode === "equally" ||
+              (mode === "percent"
+                ? toBps(entries[member.id] ?? "") > 0
+                : (split[member.id] ?? 0) > 0)),
+        )
 
         .map((member) => {
           if (mode === "exact") {
@@ -550,7 +540,8 @@ export default function AddExpensePage() {
                 <button
                   type="button"
                   className={mode === "equally" ? "active" : ""}
-                  onClick={() => setMode("equally")}
+                  onClick={() => changeMode("equally")}
+                  aria-pressed={mode === "equally"}
                 >
                   Equally
                 </button>
@@ -558,7 +549,8 @@ export default function AddExpensePage() {
                 <button
                   type="button"
                   className={mode === "exact" ? "active" : ""}
-                  onClick={() => setMode("exact")}
+                  onClick={() => changeMode("exact")}
+                  aria-pressed={mode === "exact"}
                 >
                   Exact ₱
                 </button>
@@ -566,7 +558,8 @@ export default function AddExpensePage() {
                 <button
                   type="button"
                   className={mode === "percent" ? "active" : ""}
-                  onClick={() => setMode("percent")}
+                  onClick={() => changeMode("percent")}
+                  aria-pressed={mode === "percent"}
                 >
                   Percent %
                 </button>
@@ -596,8 +589,15 @@ export default function AddExpensePage() {
                           {member.id === userId ? "You" : member.name}
                         </strong>
 
-                        {mode !== "equally" && (
+                        {mode === "percent" && (
                           <small>{money(split[member.id] || 0)}</small>
+                        )}
+                        {mode === "exact" && total > 0 && (
+                          <small>
+                            {hundredthsToInput(exactPercents[member.id] ?? 0) ||
+                              "0"}
+                            % of total
+                          </small>
                         )}
                       </div>
 

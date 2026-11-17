@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import "./group-details.css";
 import GroupDetailsSkeleton from "@/components/GroupDetailsSkeleton";
 import Image from "next/image";
+import { isZero, peso } from "@/lib/manemi/format";
 
 type Group = {
   groupId: string;
@@ -27,11 +28,15 @@ type Expense = {
   receiptUrl: string | null;
 };
 
-const formatPeso = (amount: number) =>
-  new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  }).format(amount);
+type MemberBalance = { userId?: string; net: number };
+
+type BalancesResponse = {
+  error?: string;
+  members?: Array<{ userId?: string; net: number | string }>;
+  summary?: { owedToYou?: number | string; youOwe?: number | string };
+};
+
+const formatPeso = peso;
 
 export default function GroupDetailsPage() {
   const params = useParams<{ groupId: string }>();
@@ -54,6 +59,12 @@ export default function GroupDetailsPage() {
   const [addedExpense, setAddedExpense] = useState<Expense | null>(null);
   const [expenseSheetClosing, setExpenseSheetClosing] = useState(false);
   const [refreshExpenses, setRefreshExpenses] = useState(0);
+  const [activeTab, setActiveTab] = useState<"expenses" | "balances">(
+    "expenses",
+  );
+  const [myNet, setMyNet] = useState<number | null>(null);
+  const [memberBalances, setMemberBalances] = useState<MemberBalance[]>([]);
+  const [balanceError, setBalanceError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -74,132 +85,143 @@ export default function GroupDetailsPage() {
         return;
       }
 
-      // Confirm the current user belongs to this group before loading it.
-      const { data: membership, error: membershipError } = await supabase
-        .from("Group_Member")
-        .select("userId")
-        .eq("groupId", params.groupId)
-        .eq("userId", auth.user.id)
-        .maybeSingle();
+      const me = auth.user;
+      setCurrentUserId(me.id);
+
+      // Everything below only needs the group ID, so load it in parallel.
+      // The roster doubles as the membership check.
+      const [groupResult, rosterResult, expenseResult, balanceResult] =
+        await Promise.all([
+          supabase
+            .from("Group")
+            .select("groupId, name, createdBy")
+            .eq("groupId", params.groupId)
+            .maybeSingle(),
+          supabase
+            .from("Group_Member")
+            .select("userId")
+            .eq("groupId", params.groupId),
+          supabase
+            .from("Expense")
+            .select(
+              "expenseId, paidBy_UserId, title, totalAmount, expenseDate, category, receiptUrl",
+            )
+            .eq("groupId", params.groupId)
+            .order("expenseDate", { ascending: false }),
+          supabase.functions.invoke<BalancesResponse>("get-balances", {
+            body: { groupId: params.groupId },
+          }),
+        ]);
 
       if (!active) return;
-      if (membershipError) {
-        setError(membershipError.message);
-        setLoading(false);
-        return;
-      }
-      if (!membership) {
-        setError("Group not found or you do not have access.");
-        setLoading(false);
-        return;
-      }
 
-      setCurrentUserId(auth.user.id);
-
-      const { data, error: queryError } = await supabase
-        .from("Group")
-        .select("groupId, name, createdBy")
-        .eq("groupId", params.groupId)
-        .maybeSingle();
-
-      if (!active) return;
-
-      if (queryError) {
-        setError(queryError.message);
-        setLoading(false);
-        return;
-      }
-
-      if (!data) {
-        setError("Group not found or you do not have access.");
-        setLoading(false);
-        return;
-      }
-
-      setGroup(data);
-
-      // Load the actual group roster and their display names.
-      const { data: memberRows, error: memberError } = await supabase
-        .from("Group_Member")
-        .select("userId")
-        .eq("groupId", params.groupId);
-
-      if (!active) return;
+      const { data: memberRows, error: memberError } = rosterResult;
       if (memberError) {
         setError(`Unable to load group members: ${memberError.message}`);
         setLoading(false);
         return;
       }
-
       const memberIds = [
         ...new Set((memberRows ?? []).map((row) => row.userId as string)),
       ];
+      if (!memberIds.includes(me.id)) {
+        setError("Group not found or you do not have access.");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error: queryError } = groupResult;
+      if (queryError || !data) {
+        setError(queryError?.message || "Group not found or you do not have access.");
+        setLoading(false);
+        return;
+      }
+      setGroup(data);
+
+      // Personal balance and per-member nets from get-balances.
+      const balances = balanceResult.data;
+      if (
+        balanceResult.error ||
+        balances?.error ||
+        !Array.isArray(balances?.members)
+      ) {
+        setBalanceError(
+          balanceResult.error?.message ??
+            balances?.error ??
+            "Balances are unavailable right now.",
+        );
+        setMyNet(null);
+        setMemberBalances([]);
+      } else {
+        setBalanceError("");
+        setMyNet(
+          (Number(balances.summary?.owedToYou ?? 0) || 0) -
+            (Number(balances.summary?.youOwe ?? 0) || 0),
+        );
+        setMemberBalances(
+          balances.members.map((member) => ({
+            userId: member.userId,
+            net: Number(member.net) || 0,
+          })),
+        );
+      }
+
+      const expenseData = expenseResult.data;
+      const expenseIds = (expenseData ?? []).map((item) => item.expenseId);
+
+      // Names and split participants depend on the results above.
+      const [usersResult, splitsResult] = await Promise.all([
+        memberIds.length
+          ? supabase.from("User").select("userId, name").in("userId", memberIds)
+          : Promise.resolve({ data: [], error: null }),
+        expenseIds.length
+          ? supabase
+              .from("Expense_Split")
+              .select("expenseId, userId")
+              .in("expenseId", expenseIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (!active) return;
+
       let namesById = new Map<string, string>();
-      if (memberIds.length) {
-        const { data: users, error: usersError } = await supabase
-          .from("User")
-          .select("userId, name")
-          .in("userId", memberIds);
-        if (!active) return;
-        if (usersError) {
-          console.warn("Unable to load member names:", usersError.message);
-        } else {
-          namesById = new Map(
-            (users ?? []).map((user) => [
-              user.userId as string,
-              String(user.name || "").trim(),
-            ]),
-          );
-        }
+      if (usersResult.error) {
+        console.warn("Unable to load member names:", usersResult.error.message);
+      } else {
+        namesById = new Map(
+          (usersResult.data ?? []).map((user) => [
+            user.userId as string,
+            String(user.name || "").trim(),
+          ]),
+        );
       }
       setMembers(
         memberIds.map((id) => ({
           userId: id,
           name:
             namesById.get(id) ||
-            (id === auth.user.id
+            (id === me.id
               ? String(
-                  auth.user.user_metadata?.full_name ||
-                    auth.user.email?.split("@")[0] ||
+                  me.user_metadata?.full_name ||
+                    me.email?.split("@")[0] ||
                     "You",
                 )
               : "Unknown member"),
         })),
       );
 
-      const { data: expenseData, error: expenseError } = await supabase
-        .from("Expense")
-        .select(
-          "expenseId, paidBy_UserId, title, totalAmount, expenseDate, category, receiptUrl",
-        )
-        .eq("groupId", params.groupId)
-        .order("expenseDate", { ascending: false });
-
-      if (!active) return;
-
-      if (expenseError) {
-        console.error("Failed to load expenses:", expenseError.message);
+      if (expenseResult.error) {
+        console.error("Failed to load expenses:", expenseResult.error.message);
         setError("Unable to load group expenses.");
       } else {
         setExpenses(expenseData ?? []);
-        const expenseIds = (expenseData ?? []).map((item) => item.expenseId);
-        if (expenseIds.length) {
-          const { data: splits, error: splitsError } = await supabase
-            .from("Expense_Split")
-            .select("expenseId, userId")
-            .in("expenseId", expenseIds);
-          if (!active) return;
-          if (splitsError) {
-            console.warn(
-              "Unable to load expense participants:",
-              splitsError.message,
-            );
-            setExpenseSplits([]);
-          } else {
-            setExpenseSplits(splits ?? []);
-          }
-        } else {
+        if (splitsResult.error) {
+          console.warn(
+            "Unable to load expense participants:",
+            splitsResult.error.message,
+          );
           setExpenseSplits([]);
+        } else {
+          setExpenseSplits((splitsResult.data ?? []) as ExpenseSplit[]);
         }
         // Read the saved expense ID after returning from Add Expense.
         // Match it against the database result, not a hardcoded title/amount.
@@ -232,6 +254,16 @@ export default function GroupDetailsPage() {
       active = false;
     };
   }, [params.groupId, refreshExpenses]);
+
+  // Toasts dismiss themselves after a few seconds.
+  useEffect(() => {
+    if (!expenseNotice && !addedExpense) return;
+    const timer = window.setTimeout(() => {
+      setExpenseNotice("");
+      setAddedExpense(null);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [expenseNotice, addedExpense]);
 
   const openExpenseDetails = (expense: Expense) => {
     setSelectedExpense(expense);
@@ -282,7 +314,6 @@ export default function GroupDetailsPage() {
 
       if (data?.error) {
         throw new Error(data.error);
-        console.log("CREATE EXPENSE RESPONSE:", data);
       }
 
       if (data?.expenseId !== selectedExpense.expenseId) {
@@ -385,9 +416,9 @@ export default function GroupDetailsPage() {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(window.location.href);
-                  alert("Group link copied");
+                  setExpenseNotice("Group link copied");
                 } catch {
-                  alert("Unable to copy link");
+                  setExpenseNotice("Unable to copy link");
                 }
               }}
             >
@@ -464,14 +495,31 @@ export default function GroupDetailsPage() {
                   </div>
                 </div>
 
-                <div className="md-settled">
-                  <span className="md-settled-icon">✓</span>
-
-                  <div>
-                    <small>Your balance </small>
-                    <strong>₱0.00 · Balance not yet connected</strong>
-                  </div>
-                </div>
+                {(() => {
+                  const tone =
+                    myNet === null
+                      ? { cls: "md-balance-unknown", icon: "?", text: "Balance unavailable" }
+                      : isZero(myNet)
+                        ? { cls: "md-balance-zero", icon: "✓", text: "Settled up" }
+                        : myNet > 0
+                          ? { cls: "md-balance-positive", icon: "↙", text: "You're owed" }
+                          : { cls: "md-balance-negative", icon: "↗", text: "You owe" };
+                  return (
+                    <div className={`md-settled ${tone.cls}`}>
+                      <span className="md-settled-icon" aria-hidden="true">
+                        {tone.icon}
+                      </span>
+                      <div>
+                        <small>Your balance</small>
+                        <strong>
+                          {myNet === null
+                            ? balanceError || tone.text
+                            : `${tone.text} · ${formatPeso(Math.abs(myNet))}`}
+                        </strong>
+                      </div>
+                    </div>
+                  );
+                })()}
               </section>
 
               {transactionCount === 0 ? (
@@ -504,19 +552,75 @@ export default function GroupDetailsPage() {
                 </section>
               ) : (
                 <section className="md-expenses-section">
-                  <div className="md-tabs">
-                    <button type="button" className="active">
+                  <div className="md-tabs" role="tablist">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === "expenses"}
+                      className={activeTab === "expenses" ? "active" : ""}
+                      onClick={() => setActiveTab("expenses")}
+                    >
                       Expenses
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => alert("Balances coming soon.")}
+                      role="tab"
+                      aria-selected={activeTab === "balances"}
+                      className={activeTab === "balances" ? "active" : ""}
+                      onClick={() => setActiveTab("balances")}
                     >
                       Balances
                     </button>
                   </div>
 
+                  {activeTab === "balances" ? (
+                    <div className="md-balances" role="tabpanel">
+                      {balanceError ? (
+                        <p className="md-no-transactions">{balanceError}</p>
+                      ) : (
+                        [...memberBalances]
+                          .sort((a, b) => b.net - a.net)
+                          .map((member, index) => {
+                            const isMe = member.userId === currentUserId;
+                            const label = member.userId
+                              ? isMe
+                                ? "You"
+                                : memberName(member.userId)
+                              : `Member ${index + 1}`;
+                            const cls = isZero(member.net)
+                              ? "md-balance-zero"
+                              : member.net > 0
+                                ? "md-balance-positive"
+                                : "md-balance-negative";
+                            return (
+                              <div
+                                key={member.userId ?? index}
+                                className={`md-balance-row ${cls}`}
+                              >
+                                <span className="md-balance-avatar" aria-hidden="true">
+                                  {label.charAt(0).toUpperCase()}
+                                </span>
+                                <div className="md-balance-name">
+                                  <strong>{label}</strong>
+                                  <small>
+                                    {isZero(member.net)
+                                      ? "✓ Settled up"
+                                      : member.net > 0
+                                        ? `↙ ${isMe ? "Are" : "Is"} owed`
+                                        : `↗ ${isMe ? "Owe" : "Owes"}`}
+                                  </small>
+                                </div>
+                                <strong className="md-balance-amount">
+                                  {formatPeso(Math.abs(member.net))}
+                                </strong>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  ) : (
+                  <>
                   <div className="md-categories">
                     {categories.map((category) => (
                       <button
@@ -544,10 +648,7 @@ export default function GroupDetailsPage() {
                           role="button"
                           tabIndex={0}
                           aria-label={`View details for ${expense.title}`}
-                          onClick={() => {
-                            console.log("Expense clicked:", expense);
-                            openExpenseDetails(expense);
-                          }}
+                          onClick={() => openExpenseDetails(expense)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
@@ -584,6 +685,8 @@ export default function GroupDetailsPage() {
                       ))
                     )}
                   </div>
+                  </>
+                  )}
                 </section>
               )}
             </>

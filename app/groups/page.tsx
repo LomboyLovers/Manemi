@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,8 +10,21 @@ import "./groups-navigation.css";
 import "./groups-compact-navigation.css";
 import "./groups-actions-sheet.css";
 import "./groups-invitations.css";
+import "./groups-balance-card.css";
 import GroupsSkeleton from "@/components/GroupSkeleton";
-import "./groups-invitations.css";
+import AddExpensePicker from "@/components/AddExpensePicker";
+import {
+  loadGroupsData,
+  totalsFor,
+  type GroupSummary,
+} from "@/lib/manemi/groups";
+import {
+  CATEGORY_META,
+  greeting,
+  initialOf,
+  isZero,
+  peso,
+} from "@/lib/manemi/format";
 
 // ==========================================
 // CUSTOM ICON COMPONENT
@@ -24,18 +37,15 @@ type CustomIconProps = {
   className?: string;
 };
 
-type GroupData = {
-  id: string;
-  name: string;
-  category: string;
-  status: "active" | "settled" | "unsettled";
-  members: number;
-  emoji: string;
-  owedByYou: number;
-  youOwe: number;
-  createdAt: string;
-  isCreator: boolean;
-};
+type GroupData = GroupSummary & { emoji: string };
+
+/** Direction of a personal balance, per the design system rules. */
+function balanceTone(net: number) {
+  if (isZero(net)) return { tone: "zero", arrow: "✓", label: "Settled up" };
+  return net > 0
+    ? { tone: "positive", arrow: "↙", label: "You're owed" }
+    : { tone: "negative", arrow: "↗", label: "You owe" };
+}
 
 function CustomIcon({ name, size = 20, className = "" }: CustomIconProps) {
   return (
@@ -55,7 +65,7 @@ function CustomIcon({ name, size = 20, className = "" }: CustomIconProps) {
 
 export default function GroupsPage() {
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [userName, setUserName] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -447,181 +457,32 @@ export default function GroupsPage() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search.trim());
-    }, 350);
-
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
     let active = true;
 
-    setLoadingGroups(true);
-
     async function loadGroups() {
-      const supabase = createClient();
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (!active) return;
-
-      if (userError || !user) {
-        setLoadingGroups(false);
-        setInitialPageLoading(false);
-        return;
-      }
-
-      // Membership determines visibility. The database RLS policies must also
-      // allow members to read their groups.
-      const { data: memberships, error: membershipError } = await supabase
-        .from("Group_Member")
-        .select("groupId")
-        .eq("userId", user.id);
-
-      if (!active) return;
-      if (membershipError) {
+      try {
+        const result = await loadGroupsData(createClient());
+        if (!active) return;
+        if (result) {
+          setUserName(result.user.name);
+          setGroups(result.groups.map((group) => ({ ...group, emoji: "📦" })));
+          setGroupsError(
+            result.warnings.length
+              ? `Some details could not be loaded: ${result.warnings.join("; ")}`
+              : "",
+          );
+        }
+      } catch (error) {
+        if (!active) return;
         setGroupsError(
-          `Unable to load group memberships: ${membershipError.message}`,
+          error instanceof Error ? error.message : "Unable to load groups.",
         );
-        setLoadingGroups(false);
-        setInitialPageLoading(false);
-        return;
+      } finally {
+        if (active) {
+          setLoadingGroups(false);
+          setInitialPageLoading(false);
+        }
       }
-
-      const memberGroupIds = [
-        ...new Set((memberships ?? []).map((m) => m.groupId)),
-      ];
-      // Also include groups created by the user, in case their membership
-      // record has not been inserted yet.
-      const { data: ownedGroups, error: ownedError } = await supabase
-        .from("Group")
-        .select("groupId")
-        .eq("createdBy", user.id);
-
-      if (!active) return;
-      if (ownedError) {
-        setGroupsError(ownedError.message);
-        setLoadingGroups(false);
-        setInitialPageLoading(false);
-        return;
-      }
-
-      const groupIds = [
-        ...new Set([
-          ...memberGroupIds,
-          ...(ownedGroups ?? []).map((g) => g.groupId),
-        ]),
-      ];
-
-      if (groupIds.length === 0) {
-        setGroups([]);
-        setGroupsError("");
-        setLoadingGroups(false);
-        setInitialPageLoading(false);
-        return;
-      }
-
-      let query = supabase
-        .from("Group")
-        .select("groupId, name, createdAt, createdBy, isArchived")
-        .in("groupId", groupIds);
-
-      if (debouncedSearch) {
-        query = query.ilike("name", `%${debouncedSearch}%`);
-      }
-
-      const { data, error } = await query.order("createdAt", {
-        ascending: false,
-      });
-
-      if (!active) return;
-      if (error) {
-        console.error("Error loading groups:", error.message);
-        setGroupsError(error.message);
-        setLoadingGroups(false);
-        setInitialPageLoading(false);
-        return;
-      }
-
-      // An archived group is Settled only when every member's net is zero.
-      // get-balances checks group membership and returns the members array.
-      const results = await Promise.all(
-        (data ?? []).map(async (group) => {
-          let status: GroupData["status"] = "active";
-          let members = 1;
-          let owedByYou = 0;
-          let youOwe = 0;
-          let balanceError: string | null = null;
-
-          const { data: balances, error: functionError } =
-            await supabase.functions.invoke("get-balances", {
-              body: { groupId: group.groupId },
-            });
-
-          if (
-            functionError ||
-            balances?.error ||
-            !Array.isArray(balances?.members)
-          ) {
-            balanceError = `${group.name}: ${functionError?.message ?? balances?.error ?? "invalid balance response"}`;
-          } else {
-            members = balances.members.length;
-            const nets = balances.members.map(
-              (member: { net: number | string }) => Number(member.net),
-            );
-            if (nets.some((net: number) => !Number.isFinite(net))) {
-              balanceError = `${group.name}: invalid member balance`;
-            } else {
-              if (group.isArchived) {
-                status = nets.every((net: number) => Math.abs(net) < 0.005)
-                  ? "settled"
-                  : "unsettled";
-              }
-              owedByYou = Number(balances.summary?.owedToYou ?? 0);
-              youOwe = Number(balances.summary?.youOwe ?? 0);
-            }
-          }
-
-          return {
-            group: {
-              id: group.groupId,
-              name: group.name,
-              category: "Other",
-              status,
-              members,
-              emoji: "📦",
-              owedByYou,
-              youOwe,
-              createdAt: group.createdAt,
-              isCreator: group.createdBy === user.id,
-            } satisfies GroupData,
-            balanceError,
-            archived: group.isArchived,
-          };
-        }),
-      );
-
-      if (!active) return;
-      // Never mislabel archived groups as Active when balances are unavailable.
-      const failed = results.filter((result) => result.balanceError);
-      const savedGroups = results
-        .filter((result) => !(result.archived && result.balanceError))
-        .map((result) => result.group);
-      if (failed.length) {
-        setGroupsError(
-          `Some balances could not be loaded: ${failed.map((r) => r.balanceError).join("; ")}`,
-        );
-      } else {
-        setGroupsError("");
-      }
-
-      setGroups(savedGroups);
-      setLoadingGroups(false);
-      setInitialPageLoading(false);
     }
 
     void loadGroups();
@@ -629,7 +490,19 @@ export default function GroupsPage() {
     return () => {
       active = false;
     };
-  }, [refreshGroups, debouncedSearch]);
+  }, [refreshGroups]);
+
+  // Search runs in memory: no network calls while typing.
+  const visibleGroups = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query
+      ? groups.filter((group) => group.name.toLowerCase().includes(query))
+      : groups;
+  }, [groups, search]);
+
+  const totals = useMemo(() => totalsFor(groups), [groups]);
+  const netTone = balanceTone(totals.net);
+  const closeAddPicker = useCallback(() => setShowAddModal(false), []);
   if (initialPageLoading) {
     return (
       <main className="manemi-groups-page">
@@ -648,8 +521,11 @@ export default function GroupsPage() {
         {loadingGroups || groups.length > 0 || Boolean(search) ? (
           <>
             <header className="manemi-rich-header">
-              <div className="manemi-rich-avatar" aria-label="Account">
-                J
+              <div
+                className="manemi-rich-avatar"
+                aria-label={userName ? `Signed in as ${userName}` : "Account"}
+              >
+                {initialOf(userName || "?")}
               </div>
               <div className="manemi-rich-header-actions">
                 <button
@@ -699,22 +575,48 @@ export default function GroupsPage() {
                   aria-label="Global balances"
                 >
                   <h2>GLOBAL BALANCES</h2>
+                  <div
+                    className={`manemi-net-balance manemi-tone-${netTone.tone}`}
+                    aria-live="polite"
+                  >
+                    <span className="manemi-net-label">
+                      Personal net balance
+                    </span>
+                    <strong>
+                      {loadingGroups
+                        ? "—"
+                        : `${totals.net < 0 && !isZero(totals.net) ? "−" : ""}${peso(Math.abs(totals.net))}`}
+                    </strong>
+                    <small>
+                      <span aria-hidden="true">{netTone.arrow}</span>{" "}
+                      {isZero(totals.net)
+                        ? "You're all square across your groups"
+                        : totals.net > 0
+                          ? "Overall, you're owed money"
+                          : "Overall, you owe money"}
+                      {` · ${groups.length} ${groups.length === 1 ? "group" : "groups"}`}
+                    </small>
+                  </div>
                   <div className="manemi-rich-balance-grid">
                     <div className="manemi-rich-balance-box">
                       <span>Total collectible</span>
-                      <strong className="manemi-rich-green">₱0.00</strong>
-                      <small>Owed to you</small>
+                      <strong className="manemi-rich-green">
+                        {peso(totals.owedToYou)}
+                      </strong>
+                      <small>
+                        <span aria-hidden="true">↙</span> Owed to you
+                      </small>
                     </div>
                     <div className="manemi-rich-balance-box">
                       <span>Total debt</span>
-                      <strong className="manemi-rich-red">₱0.00</strong>
-                      <small>You owe</small>
+                      <strong className="manemi-rich-red">
+                        {peso(totals.youOwe)}
+                      </strong>
+                      <small className="manemi-rich-red">
+                        <span aria-hidden="true">↗</span> You owe
+                      </small>
                     </div>
                   </div>
-                  <p className="manemi-rich-placeholder">
-                    Balances will update when expense calculations are
-                    connected.
-                  </p>
                 </section>
               </>
             }
@@ -739,17 +641,26 @@ export default function GroupsPage() {
                 type="search"
                 placeholder="Search your groups"
                 value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setLoadingGroups(true);
-                }}
+                onChange={(event) => setSearch(event.target.value)}
               />
+              {search && (
+                <button
+                  type="button"
+                  className="manemi-search-clear"
+                  aria-label="Clear search"
+                  onClick={() => setSearch("")}
+                >
+                  ×
+                </button>
+              )}
             </div>
           </>
         ) : (
           <>
             <header className="groups-page-header">
-              <div className="groups-page-avatar">J</div>
+              <div className="groups-page-avatar">
+                {initialOf(userName || "?")}
+              </div>
               <div className="groups-notification-wrapper">
                 <button
                   type="button"
@@ -776,9 +687,9 @@ export default function GroupsPage() {
             </header>
             <section className="groups-page-greeting">
               <h1>
-                Good morning,
+                {greeting()},
                 <br />
-                Joaquin
+                {userName.split(" ")[0] || "there"}
               </h1>
               <p>Here&apos;s what&apos;s happening with your money.</p>
             </section>
@@ -863,7 +774,7 @@ export default function GroupsPage() {
                 Categories are not saved yet. Choose All to see every group.
               </p>
             )}
-            {groups.length === 0 && search && (
+            {visibleGroups.length === 0 && search && (
               <p className="manemi-rich-filter-note">
                 No groups match your search.
               </p>
@@ -875,9 +786,12 @@ export default function GroupsPage() {
                 { status: "unsettled", label: "UNSETTLED" },
               ] as const
             ).map((section) => {
-              const sectionGroups = groups.filter(
+              const sectionGroups = visibleGroups.filter(
                 (group) => group.status === section.status,
               );
+              // Only Active is always shown; empty Settled/Unsettled are hidden.
+              if (section.status !== "active" && sectionGroups.length === 0)
+                return null;
               return (
                 <section
                   className="manemi-rich-group-section"
@@ -935,33 +849,98 @@ export default function GroupsPage() {
                             {group.members} members ·{" "}
                             {group.isCreator ? "Admin" : "Member"}
                           </p>
-                          <div className="manemi-rich-card-balance">
-                            <span>
-                              {group.status === "settled"
-                                ? "Settled"
-                                : group.youOwe > 0
-                                  ? "You owe"
-                                  : group.owedByYou > 0
-                                    ? "You're owed"
-                                    : "No personal balance"}
-                            </span>
-                            <strong>
-                              ₱
-                              {(group.youOwe > 0
-                                ? group.youOwe
-                                : group.owedByYou
-                              ).toLocaleString("en-PH", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </strong>
-                            <small>
-                              {group.status === "active"
-                                ? "Active group"
-                                : group.status === "settled"
-                                  ? "All balances paid"
-                                  : "Outstanding group balances"}
-                            </small>
+                          <div className="manemi-card-body">
+                            {(() => {
+                              const tone =
+                                group.status === "settled"
+                                  ? { tone: "zero", arrow: "✓", label: "Settled" }
+                                  : balanceTone(group.net);
+                              return (
+                                <div
+                                  className={`manemi-rich-card-balance manemi-tone-${tone.tone}`}
+                                >
+                                  <span className="manemi-card-overline">
+                                    Total Balance
+                                  </span>
+                                  <strong>{peso(Math.abs(group.net))}</strong>
+                                  <span className="manemi-card-direction">
+                                    <span aria-hidden="true">{tone.arrow}</span>{" "}
+                                    {tone.label}
+                                  </span>
+                                  <small>
+                                    {group.status === "active"
+                                      ? "Active group"
+                                      : group.status === "settled"
+                                        ? "All balances paid"
+                                        : "Outstanding group balances"}
+                                  </small>
+                                </div>
+                              );
+                            })()}
+
+                            <div
+                              className="manemi-card-breakdown"
+                              aria-label={`Expense breakdown for ${group.name}`}
+                            >
+                              <span className="manemi-card-overline">
+                                Expenses
+                              </span>
+                              {group.expenseCount === 0 ? (
+                                <p className="manemi-breakdown-empty">
+                                  No expenses yet
+                                </p>
+                              ) : (
+                                <>
+                                  <p className="manemi-breakdown-total">
+                                    {peso(group.spent)}
+                                    <small>
+                                      {" "}
+                                      · {group.expenseCount}{" "}
+                                      {group.expenseCount === 1
+                                        ? "expense"
+                                        : "expenses"}
+                                    </small>
+                                  </p>
+                                  <div
+                                    className="manemi-breakdown-bar"
+                                    aria-hidden="true"
+                                  >
+                                    {group.breakdown.map((slice) => (
+                                      <span
+                                        key={slice.key}
+                                        style={{
+                                          width: `${(slice.amount / group.spent) * 100}%`,
+                                          background:
+                                            CATEGORY_META[slice.key].color,
+                                        }}
+                                      />
+                                    ))}
+                                  </div>
+                                  <ul className="manemi-breakdown-list">
+                                    {group.breakdown.slice(0, 3).map((slice) => (
+                                      <li key={slice.key}>
+                                        <i
+                                          aria-hidden="true"
+                                          style={{
+                                            background:
+                                              CATEGORY_META[slice.key].color,
+                                          }}
+                                        />
+                                        <span>
+                                          {CATEGORY_META[slice.key].label}
+                                        </span>
+                                        <b>{peso(slice.amount)}</b>
+                                      </li>
+                                    ))}
+                                    {group.breakdown.length > 3 && (
+                                      <li className="manemi-breakdown-more">
+                                        +{group.breakdown.length - 3} more
+                                      </li>
+                                    )}
+                                  </ul>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </article>
                       ),
@@ -1463,26 +1442,11 @@ export default function GroupsPage() {
       {/* ADD EXPENSE MODAL */}
 
       {showAddModal && (
-        <div
-          className="groups-modal-overlay"
-          onClick={() => setShowAddModal(false)}
-        >
-          <div
-            className="groups-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="groups-add-expense-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="groups-add-expense-title">Add Expense</h2>
-
-            <p>Your expense creation form will go here.</p>
-
-            <button type="button" onClick={() => setShowAddModal(false)}>
-              Close
-            </button>
-          </div>
-        </div>
+        <AddExpensePicker
+          groups={groups}
+          onClose={closeAddPicker}
+          onCreateGroup={() => setShowCreateModal(true)}
+        />
       )}
 
       {/* CREATE GROUP BOTTOM SHEET */}
