@@ -1396,3 +1396,22 @@
     margin-top: 0;
   }
 }
+
+/* 44px minimum tap targets (back link, top actions, tabs, filter chips). */
+.md-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.md-top-actions button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.md-tabs button,
+.md-categories button {
+  min-height: 44px;
+}
+.md-categories button {
+  min-width: 44px;
+  justify-content: center;
+}

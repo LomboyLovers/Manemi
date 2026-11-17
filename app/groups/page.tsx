@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -11,16 +11,16 @@ import "./groups-actions-sheet.css";
 import "./groups-invitations.css";
 import "./groups-balance-card.css";
 import GroupsSkeleton from "@/components/GroupSkeleton";
-import AddExpensePicker from "@/components/AddExpensePicker";
+import PageHeader, { HeaderButton } from "@/components/PageHeader";
 import AppNav from "@/components/AppNav";
 import {
   loadGroupsData,
   totalsFor,
+  type CurrentUser,
   type GroupSummary,
 } from "@/lib/manemi/groups";
 import {
   greeting,
-  initialOf,
   isZero,
   peso,
 } from "@/lib/manemi/format";
@@ -64,11 +64,9 @@ function CustomIcon({ name, size = 20, className = "" }: CustomIconProps) {
 
 export default function GroupsPage() {
   const [search, setSearch] = useState("");
-  const [userName, setUserName] = useState("");
-  const [showMenu, setShowMenu] = useState(false);
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupCategory, setGroupCategory] = useState("Travel");
   const [groups, setGroups] = useState<GroupData[]>([]);
@@ -300,20 +298,6 @@ export default function GroupsPage() {
     }
   }
 
-  async function handleLogout() {
-    const supabase = createClient();
-
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    router.replace("/");
-    router.refresh();
-  }
-
   async function handleArchiveGroup() {
     if (
       !archiveGroup ||
@@ -463,7 +447,7 @@ export default function GroupsPage() {
         const result = await loadGroupsData(createClient());
         if (!active) return;
         if (result) {
-          setUserName(result.user.name);
+          setUser(result.user);
           setGroups(result.groups.map((group) => ({ ...group, emoji: "📦" })));
           setGroupsError(
             result.warnings.length
@@ -501,15 +485,13 @@ export default function GroupsPage() {
 
   const totals = useMemo(() => totalsFor(groups), [groups]);
   const netTone = balanceTone(totals.net);
-  const closeAddPicker = useCallback(() => setShowAddModal(false), []);
   if (initialPageLoading) {
     return (
       <main className="manemi-groups-page mn-app-page">
         <div className="groups-page-content">
-          <div className="manemi-groups-skeleton-container">
-            <GroupsSkeleton />
-          </div>
+          <GroupsSkeleton />
         </div>
+        <AppNav active="groups" />
       </main>
     );
   }
@@ -519,50 +501,17 @@ export default function GroupsPage() {
         {/* HEADER */}
         {loadingGroups || groups.length > 0 || Boolean(search) ? (
           <>
-            <header className="manemi-rich-header">
-              <div
-                className="manemi-rich-avatar"
-                aria-label={userName ? `Signed in as ${userName}` : "Account"}
+            <PageHeader user={user}>
+              <HeaderButton label="Join group" onClick={() => setShowJoinModal(true)}>
+                <CustomIcon name="group" size={22} />
+              </HeaderButton>
+              <HeaderButton
+                label="Search groups"
+                onClick={() => document.getElementById("manemi-rich-search")?.focus()}
               >
-                {initialOf(userName || "?")}
-              </div>
-              <div className="manemi-rich-header-actions">
-                <button
-                  type="button"
-                  className="manemi-rich-circle"
-                  aria-label="Join group"
-                  onClick={() => setShowJoinModal(true)}
-                >
-                  <CustomIcon name="group" size={22} />
-                </button>
-                <button
-                  type="button"
-                  className="manemi-rich-circle"
-                  aria-label="Search groups"
-                  onClick={() =>
-                    document.getElementById("manemi-rich-search")?.focus()
-                  }
-                >
-                  <CustomIcon name="search" size={22} />
-                </button>
-                <button
-                  type="button"
-                  className="manemi-rich-circle"
-                  aria-label="Account menu"
-                  aria-expanded={showMenu}
-                  onClick={() => setShowMenu(!showMenu)}
-                >
-                  <CustomIcon name="bell" size={20} />
-                </button>
-                {showMenu && (
-                  <div className="manemi-rich-account-menu">
-                    <button type="button" onClick={handleLogout}>
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            </header>
+                <CustomIcon name="search" size={22} />
+              </HeaderButton>
+            </PageHeader>
             <div className="manemi-rich-heading">
               <h1>Groups</h1>
               <p>Manage peer-to-peer debts within your circles.</p>
@@ -656,39 +605,12 @@ export default function GroupsPage() {
           </>
         ) : (
           <>
-            <header className="groups-page-header">
-              <div className="groups-page-avatar">
-                {initialOf(userName || "?")}
-              </div>
-              <div className="groups-notification-wrapper">
-                <button
-                  type="button"
-                  className="groups-notification-button"
-                  aria-label="Notifications and account menu"
-                  aria-expanded={showMenu}
-                  onClick={() => setShowMenu(!showMenu)}
-                >
-                  <CustomIcon name="bell" size={18} />
-                </button>
-                {showMenu && (
-                  <div className="groups-account-menu">
-                    <p>No new notifications</p>
-                    <button
-                      type="button"
-                      className="groups-logout"
-                      onClick={handleLogout}
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            </header>
+            <PageHeader user={user} />
             <section className="groups-page-greeting">
               <h1>
                 {greeting()},
                 <br />
-                {userName.split(" ")[0] || "there"}
+                {user?.name.split(" ")[0] || "there"}
               </h1>
               <p>Here&apos;s what&apos;s happening with your money.</p>
             </section>
@@ -953,7 +875,7 @@ export default function GroupsPage() {
         )}
       </div>
 
-      <AppNav active="groups" onAdd={() => setShowAddModal(true)} />
+      <AppNav active="groups" groups={groups} />
 
       {/* GROUP ACTIONS BOTTOM SHEET */}
       {selectedGroup && (
@@ -1392,15 +1314,6 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* ADD EXPENSE MODAL */}
-
-      {showAddModal && (
-        <AddExpensePicker
-          groups={groups}
-          onClose={closeAddPicker}
-          onCreateGroup={() => setShowCreateModal(true)}
-        />
-      )}
 
       {/* CREATE GROUP BOTTOM SHEET */}
       {showCreateModal && (

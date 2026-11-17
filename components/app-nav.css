@@ -188,3 +188,13 @@
     filter: brightness(1.08);
   }
 }
+
+/* + becomes ✕ on a neutral surface while quick actions are open. */
+.mn-nav-add.is-open {
+  background: var(--mn-input, #25252b);
+  box-shadow: none;
+  border: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-nav-add.is-open > span[aria-hidden="true"] {
+  font-size: 34px;
+}

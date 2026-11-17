@@ -1,15 +1,16 @@
+/* Skeleton blocks: opacity pulse only (no background animation). */
 .manemi-skeleton {
-  background: linear-gradient(100deg, #24212d 20%, #383044 40%, #24212d 60%);
-  background-size: 200% 100%;
-  animation: manemi-shimmer 1.6s ease-in-out infinite;
+  background: var(--mn-surface-3, #2f2f36);
+  animation: manemi-pulse 1.4s ease-in-out infinite;
 }
 
-@keyframes manemi-shimmer {
-  0% {
-    background-position: 100% 0;
-  }
+@keyframes manemi-pulse {
+  0%,
   100% {
-    background-position: -100% 0;
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
   }
 }
 

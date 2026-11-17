@@ -1,33 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import AddExpensePicker from "@/components/AddExpensePicker";
+import HomeSkeleton from "@/components/HomeSkeleton";
+import PageHeader from "@/components/PageHeader";
 import AppNav from "@/components/AppNav";
 import {
   loadGroupsData,
   totalsFor,
+  type CurrentUser,
   type GroupSummary,
 } from "@/lib/manemi/groups";
-import { greeting, initialOf, isZero, peso } from "@/lib/manemi/format";
+import { greeting, isZero, peso } from "@/lib/manemi/format";
 
 export default function Dashboard() {
   const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [userName, setUserName] = useState("");
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
-  const [showMenu, setShowMenu] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     let active = true;
     loadGroupsData(createClient())
       .then((result) => {
         if (!active || !result) return;
-        setUserName(result.user.name);
+        setUser(result.user);
         // Most recently active groups first.
         setGroups(
           [...result.groups].sort((a, b) =>
@@ -59,60 +58,22 @@ export default function Dashboard() {
       : recent;
   }, [groups, search]);
   const totals = useMemo(() => totalsFor(groups), [groups]);
-  const closeAddPicker = useCallback(() => setShowAddModal(false), []);
-  const router = useRouter();
-
-  async function handleLogout() {
-    const supabase = createClient();
-
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    router.replace("/");
-    router.refresh();
-  }
 
   return (
     <main className="manemi-dashboard manemi-dashboard-v2 mn-app-page">
       <div className="dashboard-container">
       <div className="dashboard-content">
-        <header className="dashboard-header">
-          <div className="dashboard-avatar">{initialOf(userName || "?")}</div>
-          <div className="notification-wrapper">
-            <button
-              type="button"
-              className="notification-button"
-              aria-label="Notifications"
-              aria-expanded={showMenu}
-              onClick={() => setShowMenu(!showMenu)}
-            >
-              <span aria-hidden="true">♧</span>
-              <span className="notification-dot" />
-            </button>
-            {showMenu && (
-              <div className="dashboard-dropdown">
-                <p>No new notifications</p>
-                <button
-                  type="button"
-                  className="dashboard-logout"
-                  onClick={handleLogout}
-                >
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
-        </header>
+        {loading ? (
+          <HomeSkeleton />
+        ) : (
+        <>
+        <PageHeader user={user} />
 
         <section className="dashboard-greeting" id="home">
           <h1>
             {greeting()},
             <br />
-            {userName.split(" ")[0] || "there"}
+            {user?.name.split(" ")[0] || "there"}
           </h1>
           <p>Here&apos;s what&apos;s happening with your money.</p>
         </section>
@@ -145,11 +106,6 @@ export default function Dashboard() {
           </p>
         )}
 
-        {loading && (
-          <p className="dashboard-empty" aria-busy="true">
-            Loading your groups…
-          </p>
-        )}
 
         {!loading && groups.length === 0 && !loadError && (
           <section className="dashboard-section">
@@ -269,18 +225,12 @@ export default function Dashboard() {
             {/* Activity is intentionally hidden until real group activity is available. */}
           </>
         )}
+        </>
+        )}
       </div>
       </div>
 
-      <AppNav active="home" onAdd={() => setShowAddModal(true)} />
-
-      {showAddModal && (
-        <AddExpensePicker
-          groups={groups}
-          onClose={closeAddPicker}
-          onCreateGroup={() => router.push("/groups")}
-        />
-      )}
+      <AppNav active="home" groups={loading ? undefined : groups} />
     </main>
   );
 }

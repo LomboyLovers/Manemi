@@ -58,8 +58,16 @@ export type HistoryExpense = {
   involvesYou: boolean;
 };
 
+export type CurrentUser = {
+  id: string;
+  name: string;
+  email: string;
+  /** User.userCode, shown as @handle. */
+  handle: string;
+};
+
 export type GroupsData = {
-  user: { id: string; name: string };
+  user: CurrentUser;
   groups: GroupSummary[];
   /** Every expense across your groups, newest first. */
   expenses: HistoryExpense[];
@@ -122,7 +130,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     supabase.from("Group_Member").select("groupId").eq("userId", me.id),
     // Include groups the user created in case the membership row is missing.
     supabase.from("Group").select("groupId").eq("createdBy", me.id),
-    supabase.from("User").select("name").eq("userId", me.id).maybeSingle(),
+    supabase.from("User").select("name, userCode").eq("userId", me.id).maybeSingle(),
   ]);
   if (membershipsResult.error)
     throw new Error(`Unable to load group memberships: ${membershipsResult.error.message}`);
@@ -134,13 +142,20 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     me.email?.split("@")[0] ||
     "there";
 
+  const currentUser: CurrentUser = {
+    id: me.id,
+    name: myName,
+    email: me.email ?? "",
+    handle: String(profileResult.data?.userCode ?? "").trim(),
+  };
+
   const groupIds = [
     ...new Set<string>([
       ...(membershipsResult.data ?? []).map((row: { groupId: string }) => row.groupId),
       ...(ownedResult.data ?? []).map((row: { groupId: string }) => row.groupId),
     ]),
   ];
-  const empty = { user: { id: me.id, name: myName }, groups: [], expenses: [], warnings: [] };
+  const empty = { user: currentUser, groups: [], expenses: [], warnings: [] };
   if (!groupIds.length) return empty;
 
   const [groupsResult, rosterResult, expensesResult] = await Promise.all([
@@ -302,7 +317,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     },
   );
 
-  return { user: { id: me.id, name: myName }, groups, expenses: history, warnings };
+  return { user: currentUser, groups, expenses: history, warnings };
 }
 
 /** Totals across groups for the balance summaries. */

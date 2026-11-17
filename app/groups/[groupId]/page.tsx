@@ -947,7 +947,7 @@ export default function GroupDetailsPage() {
         </div>
       )}
 
-      <AppNav active="groups" onAdd={openAddExpense} />
+      <AppNav active="groups" />
     </main>
   );
 }

@@ -345,19 +345,6 @@
     background-position: -200% 0;
   }
 }
-/* Full-page skeleton sizing */
-
-.manemi-groups-skeleton-container {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.manemi-groups-skeleton-container .groups-skeleton-page {
-  width: 100%;
-  max-width: none;
-  box-sizing: border-box;
-}
 /* ==========================================
    GROUP SECTION SPACING
    Active / Settled / Unsettled

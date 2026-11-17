@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import AppNav from "@/components/AppNav";
-import AddExpensePicker from "@/components/AddExpensePicker";
+import QuickActions from "@/components/QuickActions";
+import PageHeader from "@/components/PageHeader";
 import {
   loadGroupsData,
+  type CurrentUser,
   type GroupSummary,
   type HistoryExpense,
 } from "@/lib/manemi/groups";
-import { CATEGORY_META, initialOf, peso } from "@/lib/manemi/format";
+import { CATEGORY_META, peso } from "@/lib/manemi/format";
 import "./history.css";
 
 // Pattern 10 (Inbox / Activity Feed), variant A: a standalone, newest-first
@@ -89,7 +91,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [userId, setUserId] = useState("");
-  const [userName, setUserName] = useState("");
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [expenses, setExpenses] = useState<HistoryExpense[]>([]);
 
@@ -112,7 +114,7 @@ export default function HistoryPage() {
       .then((result) => {
         if (!active || !result) return;
         setUserId(result.user.id);
-        setUserName(result.user.name);
+        setUser(result.user);
         setGroups(result.groups);
         setExpenses(result.expenses);
         if (result.warnings.length)
@@ -194,10 +196,7 @@ export default function HistoryPage() {
   return (
     <main className="mn-app-page mn-history">
       <div className="mn-history-content">
-        <header className="mn-history-top">
-          <div className="mn-history-avatar" aria-label={userName ? `Signed in as ${userName}` : "Account"}>
-            {initialOf(userName || "?")}
-          </div>
+        <PageHeader user={user} showBell={false}>
           <div className="mn-history-options" ref={optionsRef}>
             <button
               type="button"
@@ -246,7 +245,7 @@ export default function HistoryPage() {
               </div>
             )}
           </div>
-        </header>
+        </PageHeader>
 
         <div className="mn-history-heading">
           <h1>History</h1>
@@ -414,9 +413,9 @@ export default function HistoryPage() {
         )}
       </div>
 
-      <AppNav active="history" onAdd={() => setShowAdd(true)} />
+      <AppNav active="history" groups={loading ? undefined : groups} />
 
-      {showAdd && <AddExpensePicker groups={groups} onClose={closeAdd} />}
+      {showAdd && <QuickActions groups={groups} initialStep="add-type" onClose={closeAdd} />}
     </main>
   );
 }

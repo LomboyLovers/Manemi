@@ -3221,3 +3221,9 @@ button:disabled {
     flex: none;
   }
 }
+.manemi-dashboard-v2 .dashboard-see-all {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+}

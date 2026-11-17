@@ -19,7 +19,7 @@
 
 /* Wide cards: breakdown fills the empty space beside the balance.
    Only the top divider line; no vertical line. */
-@container (min-width: 300px) {
+@container (min-width: 420px) {
   .manemi-card-body {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
     gap: 20px;
@@ -201,9 +201,47 @@
   cursor: pointer;
 }
 
-/* Phones: one card per row so the breakdown stays readable. */
-@media (max-width: 767.98px) {
-  .manemi-rich-group-grid {
+/* Cards fill the row: one column on phones, one or two on tablets, two on
+   desktop, without extra breakpoints. */
+.groups-page-content .manemi-rich-group-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+}
+
+/* Balance tiles: size amounts to the box, not the viewport, so long amounts
+   never spill out (sidebar + tablet widths included). */
+.manemi-rich-balances {
+  container-type: inline-size;
+}
+.manemi-rich-balances .manemi-rich-balance-box {
+  min-width: 0;
+}
+.manemi-rich-balances .manemi-rich-balance-box strong {
+  font-size: clamp(18px, 6.5cqi, 36px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Narrow balance box: stack the two tiles so amounts keep full size. */
+@container (max-width: 420px) {
+  .manemi-rich-balances .manemi-rich-balance-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .manemi-rich-balances .manemi-rich-balance-box strong {
+    font-size: 28px;
+  }
+}
+
+/* Card amount scales with the card (cards are size containers). */
+.manemi-rich-group-card .manemi-rich-card-balance strong {
+  font-size: clamp(20px, 6.5cqi, 30px);
+}
+
+/* 44px minimum tap targets for the filter chips. */
+.manemi-rich-filter {
+  min-height: 44px;
+}
+.manemi-rich-dots {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px -10px 0 0; /* bigger hit area without moving the dots */
 }
