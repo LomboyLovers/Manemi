@@ -8,7 +8,15 @@ const pesoFormatter = new Intl.NumberFormat("en-PH", {
 /** Always ₱ with 2 decimals, via Intl en-PH. */
 export const peso = (amount: number) => pesoFormatter.format(amount);
 
-export type CategoryKey = "food" | "transport" | "lodging" | "shopping" | "other";
+// Matches the database's expense_category list.
+export type CategoryKey =
+  | "food"
+  | "transport"
+  | "lodging"
+  | "shopping"
+  | "utilities"
+  | "entertainment"
+  | "other";
 
 export const CATEGORY_META: Record<
   CategoryKey,
@@ -18,6 +26,8 @@ export const CATEGORY_META: Record<
   transport: { label: "Transport", icon: "🚕", color: "#5AA9FF" },
   lodging: { label: "Lodging", icon: "🏠", color: "#C4A1FF" },
   shopping: { label: "Shopping", icon: "🛍️", color: "#FF8FA3" },
+  utilities: { label: "Utilities", icon: "💡", color: "#4FD1C5" },
+  entertainment: { label: "Entertainment", icon: "🎬", color: "#A3E635" },
   other: { label: "Other", icon: "💳", color: "#8A8A95" },
 };
 

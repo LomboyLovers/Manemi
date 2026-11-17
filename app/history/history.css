@@ -8,7 +8,7 @@
 }
 .mn-history-content {
   width: 100%;
-  max-width: 880px;
+  max-width: var(--mn-content-max, 1280px);
   margin: 0 auto;
   padding: 24px 20px 48px;
 }
@@ -490,5 +490,11 @@
     width: 44px;
     height: 44px;
     font-size: 22px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .mn-history-content {
+    padding-inline: 40px;
   }
 }

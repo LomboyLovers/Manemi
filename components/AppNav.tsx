@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { GroupSummary } from "@/lib/manemi/groups";
+import { createClient } from "@/lib/supabase/client";
+import { loadCurrentUser } from "@/lib/manemi/friends";
+import { initialOf } from "@/lib/manemi/format";
 import QuickActions from "./QuickActions";
+import AccountSheet from "./AccountSheet";
 import "./app-nav.css";
 
 export type NavSection = "home" | "groups" | "friends" | "history";
@@ -38,6 +42,18 @@ type Props = {
  */
 export default function AppNav({ active, groups }: Props) {
   const [quickOpen, setQuickOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [me, setMe] = useState<Awaited<ReturnType<typeof loadCurrentUser>>>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadCurrentUser(createClient())
+      .then((user) => active && setMe(user))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <>
@@ -76,9 +92,30 @@ export default function AppNav({ active, groups }: Props) {
           <span aria-hidden="true">{quickOpen ? "×" : "+"}</span>
           <span className="mn-nav-add-label">{quickOpen ? "Close" : "Add Expense"}</span>
         </button>
+
+        {/* Profile sits at the bottom-left of the sidebar (desktop). */}
+        <button
+          type="button"
+          className="mn-nav-profile"
+          aria-haspopup="dialog"
+          aria-label={me ? `Account: ${me.name}` : "Account"}
+          onClick={() => setAccountOpen(true)}
+          disabled={!me}
+        >
+          <span className="mn-nav-profile-avatar" aria-hidden="true">
+            {initialOf(me?.name || "?")}
+          </span>
+          <span className="mn-nav-profile-text">
+            <strong>{me?.name ?? "Loading…"}</strong>
+            {me?.handle && <span>@{me.handle}</span>}
+          </span>
+        </button>
       </nav>
 
       {quickOpen && <QuickActions groups={groups} onClose={() => setQuickOpen(false)} />}
+      {accountOpen && me && (
+        <AccountSheet name={me.name} email={me.email} handle={me.handle} onClose={() => setAccountOpen(false)} />
+      )}
     </>
   );
 }

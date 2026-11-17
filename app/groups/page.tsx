@@ -13,6 +13,7 @@ import "./groups-balance-card.css";
 import GroupsSkeleton from "@/components/GroupSkeleton";
 import PageHeader, { HeaderButton } from "@/components/PageHeader";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
+import LeaveGroupDialog from "@/components/LeaveGroupDialog";
 import AppNav from "@/components/AppNav";
 import {
   loadGroupsData,
@@ -84,6 +85,8 @@ export default function GroupsPage() {
   const [archiveGroupId, setArchiveGroupId] = useState<string | null>(null);
   const [archivingGroup, setArchivingGroup] = useState(false);
   const [archiveError, setArchiveError] = useState("");
+  const [leaveGroup, setLeaveGroup] = useState<{ id: string; name: string } | null>(null);
+  const [notice, setNotice] = useState("");
   const [createdGroup, setCreatedGroup] = useState<{
     id: string;
     name: string;
@@ -375,13 +378,7 @@ export default function GroupsPage() {
               onNotificationsChange={() => setRefreshGroups((value) => value + 1)}
             >
               <HeaderButton label="Join group" onClick={() => setShowJoinModal(true)}>
-                <CustomIcon name="group" size={22} />
-              </HeaderButton>
-              <HeaderButton
-                label="Search groups"
-                onClick={() => document.getElementById("manemi-rich-search")?.focus()}
-              >
-                <CustomIcon name="search" size={22} />
+                <PeoplePlusIcon />
               </HeaderButton>
             </PageHeader>
             <div className="manemi-rich-heading">
@@ -844,9 +841,7 @@ export default function GroupsPage() {
                   type="button"
                   onClick={() => {
                     setGroupMenu(null);
-                    alert(
-                      "Leave Group will be connected after membership permissions are implemented.",
-                    );
+                    setLeaveGroup({ id: selectedGroup.id, name: selectedGroup.name });
                   }}
                 >
                   <span className="manemi-action-symbol" aria-hidden="true">
@@ -864,6 +859,25 @@ export default function GroupsPage() {
               Cancel
             </button>
           </section>
+        </div>
+      )}
+
+      {leaveGroup && (
+        <LeaveGroupDialog
+          groupId={leaveGroup.id}
+          groupName={leaveGroup.name}
+          onClose={() => setLeaveGroup(null)}
+          onLeft={() => {
+            setNotice(`You left ${leaveGroup.name}.`);
+            setLeaveGroup(null);
+            setRefreshGroups((value) => value + 1);
+          }}
+        />
+      )}
+
+      {notice && (
+        <div className="mn-toast" role="status" onAnimationEnd={() => setNotice("")}>
+          {notice}
         </div>
       )}
 
@@ -1183,5 +1197,18 @@ export default function GroupsPage() {
         </div>
       )}
     </main>
+  );
+}
+
+/** People with a plus badge: the Join group action. */
+function PeoplePlusIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+      <circle cx="16" cy="6.5" r="2.5" />
+      <path d="M17.5 12.4c1.1.4 2 1 2.6 1.8" />
+      <path d="M19.5 16.5v5M17 19h5" />
+    </svg>
   );
 }

@@ -17,13 +17,23 @@ import {
   type SplitMode,
 } from "@/lib/manemi/split";
 
+import DatePicker from "@/components/DatePicker";
+
 import "./add-expense.css";
 
 type Group = { groupId: string; name: string; createdBy: string };
 
 type Member = { id: string; name: string };
 
-type Category = "Food" | "Transport" | "Lodging" | "Shopping" | "Other";
+// Same list as the database's expense_category.
+type Category =
+  | "Food"
+  | "Transport"
+  | "Lodging"
+  | "Shopping"
+  | "Utilities"
+  | "Entertainment"
+  | "Other";
 
 const categories: { name: Category; icon: string }[] = [
   { name: "Food", icon: "🍔" },
@@ -33,6 +43,10 @@ const categories: { name: Category; icon: string }[] = [
   { name: "Lodging", icon: "🏨" },
 
   { name: "Shopping", icon: "🛍️" },
+
+  { name: "Utilities", icon: "💡" },
+
+  { name: "Entertainment", icon: "🎬" },
 
   { name: "Other", icon: "📦" },
 ];
@@ -281,6 +295,10 @@ export default function AddExpensePage() {
 
         Shopping: "shopping",
 
+        Utilities: "utilities",
+
+        Entertainment: "entertainment",
+
         Other: "other",
       };
 
@@ -457,6 +475,8 @@ export default function AddExpensePage() {
                     placeholder="0.00"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
+                    // Sized to its content so "₱ amount" stays centered.
+                    style={{ width: `${Math.max((amount || "0.00").length, 1) + 0.6}ch` }}
                   />
                 </div>
               </div>
@@ -497,16 +517,11 @@ export default function AddExpensePage() {
                   </select>
                 </label>
 
-                <label className="ae-info-row" htmlFor="ae-date">
+                <div className="ae-info-row">
                   <span>Date</span>
 
-                  <input
-                    id="ae-date"
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
-                </label>
+                  <DatePicker label="Date" value={date} onChange={setDate} />
+                </div>
               </div>
 
               <div className="ae-section-label">

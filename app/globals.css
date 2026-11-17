@@ -3208,7 +3208,7 @@ button:disabled {
 }
 @container (min-width: 720px) {
   .manemi-dashboard-v2 .dashboard-content {
-    max-width: 1080px;
+    max-width: var(--mn-content-max, 1280px);
     padding-inline: 40px;
   }
   /* Recent groups: a wrapping grid instead of a sideways scroller. */

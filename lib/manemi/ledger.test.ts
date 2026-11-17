@@ -1,7 +1,7 @@
 // Run with: node --test --experimental-strip-types lib/manemi/ledger.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildLedger, sharesFromSplitRows } from "./ledger.ts";
+import { buildLedger, paymentEntry, sharesFromSplitRows } from "./ledger.ts";
 
 const exp = (
   id: string,
@@ -101,4 +101,22 @@ test("split rows: amount column, percentage column, or equal fallback", () => {
       { userId: "C", cents: 333 },
     ],
   );
+});
+
+test("a recorded payment cancels the debt it pays", () => {
+  // Kurt paid ₱600 for himself and you; you owe Kurt ₱300.
+  const ledger = buildLedger([
+    exp("e1", "K", 60000, { K: 30000, J: 30000 }),
+    // You paid Kurt back ₱200 (a settlement: payer J, receiver K).
+    paymentEntry("s1", "J", "K", 20000),
+  ]);
+  assert.deepEqual(ledger.forUser("J").counterparties, [{ userId: "K", cents: -10000 }]);
+  // Paying the rest settles it completely.
+  const settled = buildLedger([
+    exp("e1", "K", 60000, { K: 30000, J: 30000 }),
+    paymentEntry("s1", "J", "K", 20000),
+    paymentEntry("s2", "J", "K", 10000),
+  ]);
+  assert.equal(settled.forUser("J").net, 0);
+  assert.deepEqual(settled.forUser("J").counterparties, []);
 });

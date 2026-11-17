@@ -8,8 +8,9 @@ import "./group-details.css";
 import GroupDetailsSkeleton from "@/components/GroupDetailsSkeleton";
 import AppNav from "@/components/AppNav";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
+import LeaveGroupDialog from "@/components/LeaveGroupDialog";
 import { CATEGORY_META, categoryKey, isZero, peso } from "@/lib/manemi/format";
-import { buildLedger, sharesFromSplitRows } from "@/lib/manemi/ledger";
+import { buildLedger, paymentEntry, sharesFromSplitRows } from "@/lib/manemi/ledger";
 
 type Group = {
   groupId: string;
@@ -47,11 +48,16 @@ export default function GroupDetailsPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [myRole, setMyRole] = useState<"owner" | "admin" | "member">("member");
+  // Completed settle-ups: they cancel the debts they pay back.
+  const [payments, setPayments] = useState<
+    Array<{ settlementId: string; payerId: string; receiverId: string; amount: number | string }>
+  >([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [expenseSplits, setExpenseSplits] = useState<ExpenseSplit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -90,7 +96,7 @@ export default function GroupDetailsPage() {
 
       // Everything below only needs the group ID, so load it in parallel.
       // The roster doubles as the membership check.
-      const [groupResult, rosterResult, expenseResult] =
+      const [groupResult, rosterResult, expenseResult, paymentResult] =
         await Promise.all([
           supabase
             .from("Group")
@@ -108,6 +114,11 @@ export default function GroupDetailsPage() {
             )
             .eq("groupId", params.groupId)
             .order("expenseDate", { ascending: false }),
+          supabase
+            .from("Settlement")
+            .select("settlementId, payerId, receiverId, amount")
+            .eq("groupId", params.groupId)
+            .eq("status", "completed"),
         ]);
 
       if (!active) return;
@@ -142,6 +153,7 @@ export default function GroupDetailsPage() {
       }
       setGroup(data);
 
+      setPayments(paymentResult.data ?? []);
       const expenseData = expenseResult.data;
       const expenseIds = (expenseData ?? []).map((item) => item.expenseId);
 
@@ -258,8 +270,20 @@ export default function GroupDetailsPage() {
       list.push(split);
       splitsByExpense.set(split.expenseId, list);
     }
-    return buildLedger(
-      expenses.map((expense) => {
+    const paid = payments
+      .map((payment) =>
+        paymentEntry(
+          payment.settlementId,
+          payment.payerId,
+          payment.receiverId,
+          Math.round(Number(payment.amount) * 100) || 0,
+          params.groupId,
+        ),
+      )
+      .filter((entry) => entry.totalCents > 0);
+    return buildLedger([
+      ...paid,
+      ...expenses.map((expense) => {
         const totalCents = Math.round(Number(expense.totalAmount) * 100) || 0;
         let shares = sharesFromSplitRows(
           totalCents,
@@ -283,8 +307,8 @@ export default function GroupDetailsPage() {
           shares,
         };
       }),
-    );
-  }, [expenses, expenseSplits, members, params.groupId]);
+    ]);
+  }, [expenses, expenseSplits, members, payments, params.groupId]);
 
   const myBalance = currentUserId ? ledger.forUser(currentUserId) : null;
   const myNet = balanceError || !myBalance ? null : myBalance.net / 100;
@@ -397,20 +421,8 @@ export default function GroupDetailsPage() {
       ? expenses
       : expenses.filter((expense) => expense.category === activeCategory);
 
-  const categoryIcon = (category: string | null) => {
-    switch (category?.toLowerCase()) {
-      case "food":
-        return "🍔";
-      case "transport":
-        return "🚕";
-      case "lodging":
-        return "🏠";
-      case "shopping":
-        return "🛍️";
-      default:
-        return "💳";
-    }
-  };
+  const categoryIcon = (category: string | null) =>
+    CATEGORY_META[categoryKey(category)].icon;
 
   const memberCount = members.length;
 
@@ -498,6 +510,19 @@ export default function GroupDetailsPage() {
                   >
                     Copy Group Link
                   </button>
+                  {group && myRole !== "owner" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="md-menu-danger"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setLeaveOpen(true);
+                      }}
+                    >
+                      Leave Group
+                    </button>
+                  )}
                   {!canInvite && (
                     <p className="md-menu-note">
                       Only the owner or an admin can invite people.
@@ -508,6 +533,15 @@ export default function GroupDetailsPage() {
             </div>
           </div>
         </header>
+
+        {leaveOpen && group && (
+          <LeaveGroupDialog
+            groupId={group.groupId}
+            groupName={group.name}
+            onClose={() => setLeaveOpen(false)}
+            onLeft={() => router.replace("/groups")}
+          />
+        )}
 
         {loading ? (
           <GroupDetailsSkeleton />

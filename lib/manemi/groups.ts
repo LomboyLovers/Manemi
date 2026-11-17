@@ -10,6 +10,7 @@ import type { createClient } from "@/lib/supabase/client";
 import { categoryKey, type CategoryKey } from "./format.ts";
 import {
   buildLedger,
+  paymentEntry,
   sharesFromSplitRows,
   type LedgerExpense,
 } from "./ledger.ts";
@@ -50,6 +51,8 @@ export type GroupSummary = {
 };
 
 export type HistoryExpense = {
+  /** "payment" = a recorded settle-up (payer paid receiver back). */
+  kind: "expense" | "payment";
   id: string;
   groupId: string;
   groupName: string;
@@ -62,6 +65,10 @@ export type HistoryExpense = {
   /** Your share in pesos, 0 if you weren't part of it. */
   yourShare: number;
   involvesYou: boolean;
+  /** Payments only: who received the money. */
+  receiverId?: string;
+  receiverName?: string;
+  paymentMethod?: string | null;
 };
 
 export type CurrentUser = {
@@ -88,6 +95,17 @@ type ExpenseRow = {
   totalAmount: number | string;
   category: string | null;
   expenseDate: string;
+};
+
+type SettlementRow = {
+  settlementId: string;
+  groupId: string;
+  payerId: string;
+  receiverId: string;
+  amount: number | string;
+  paymentMethod: string | null;
+  settledAt: string | null;
+  createdAt: string | null;
 };
 
 type SplitRow = {
@@ -164,7 +182,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
   const empty = { user: currentUser, groups: [], expenses: [], warnings: [] };
   if (!groupIds.length) return empty;
 
-  const [groupsResult, rosterResult, expensesResult] = await Promise.all([
+  const [groupsResult, rosterResult, expensesResult, settlementsResult] = await Promise.all([
     supabase
       .from("Group")
       .select("groupId, name, createdAt, createdBy, isArchived")
@@ -176,12 +194,21 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       .select("expenseId, groupId, paidBy_UserId, title, totalAmount, category, expenseDate")
       .in("groupId", groupIds)
       .order("expenseDate", { ascending: false }),
+    // Recorded settle-ups. Only completed ones count toward balances.
+    supabase
+      .from("Settlement")
+      .select("settlementId, groupId, payerId, receiverId, amount, paymentMethod, settledAt, createdAt")
+      .in("groupId", groupIds)
+      .eq("status", "completed"),
   ]);
   if (groupsResult.error) throw new Error(groupsResult.error.message);
 
   const warnings: string[] = [];
   if (rosterResult.error) warnings.push(`Group members unavailable: ${rosterResult.error.message}`);
   if (expensesResult.error) warnings.push(`Expenses unavailable: ${expensesResult.error.message}`);
+  if (settlementsResult.error)
+    warnings.push(`Payments unavailable: ${settlementsResult.error.message}`);
+  const settlementRows = (settlementsResult.data ?? []) as SettlementRow[];
 
   const rosterRows = (rosterResult.data ?? []) as Array<{
     groupId: string;
@@ -190,7 +217,12 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
   }>;
   const expenseRows = (expensesResult.data ?? []) as ExpenseRow[];
   const peopleIds = [
-    ...new Set([me.id, ...rosterRows.map((row) => row.userId), ...expenseRows.map((row) => row.paidBy_UserId)]),
+    ...new Set([
+      me.id,
+      ...rosterRows.map((row) => row.userId),
+      ...expenseRows.map((row) => row.paidBy_UserId),
+      ...settlementRows.flatMap((row) => [row.payerId, row.receiverId]),
+    ]),
   ];
 
   const [usersResult, splitsResult] = await Promise.all([
@@ -265,6 +297,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
 
     const myShare = shares.find((share) => share.userId === me.id)?.cents ?? 0;
     history.push({
+      kind: "expense",
       id: row.expenseId,
       groupId: row.groupId,
       groupName: groupName.get(row.groupId) ?? "Group",
@@ -278,6 +311,39 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       involvesYou: myShare > 0 || row.paidBy_UserId === me.id,
     });
   }
+  // Payments cancel the debts they pay back.
+  for (const row of settlementRows) {
+    const cents = Math.round((Number(row.amount) || 0) * 100);
+    if (cents <= 0) continue;
+    const list = ledgerByGroup.get(row.groupId) ?? [];
+    list.push(paymentEntry(row.settlementId, row.payerId, row.receiverId, cents, row.groupId));
+    ledgerByGroup.set(row.groupId, list);
+    history.push({
+      kind: "payment",
+      id: row.settlementId,
+      groupId: row.groupId,
+      groupName: groupName.get(row.groupId) ?? "Group",
+      title:
+        row.payerId === me.id
+          ? `You paid ${nameOf(row.receiverId)}`
+          : row.receiverId === me.id
+            ? `${nameOf(row.payerId)} paid you`
+            : `${nameOf(row.payerId)} paid ${nameOf(row.receiverId)}`,
+      amount: toPesos(cents),
+      category: "other",
+      date: row.settledAt ?? row.createdAt ?? new Date().toISOString(),
+      payerId: row.payerId,
+      payerName: nameOf(row.payerId),
+      receiverId: row.receiverId,
+      receiverName: nameOf(row.receiverId),
+      paymentMethod: row.paymentMethod,
+      yourShare: 0,
+      involvesYou: row.payerId === me.id || row.receiverId === me.id,
+    });
+  }
+  // Newest first, expenses and payments together.
+  history.sort((a, b) => b.date.localeCompare(a.date));
+
   if (missingParticipants)
     console.warn(
       `${missingParticipants} expense(s) have no participant rows; split among all members.`,
@@ -293,7 +359,9 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       const ledger = buildLedger(expenses);
       const mine = ledger.forUser(me.id);
       const nets = [...ledger.memberNets().values()];
-      const groupHistory = history.filter((item) => item.groupId === group.groupId);
+      const groupHistory = history.filter(
+        (item) => item.groupId === group.groupId && item.kind === "expense",
+      );
 
       let spent = 0;
       let spentThisMonth = 0;

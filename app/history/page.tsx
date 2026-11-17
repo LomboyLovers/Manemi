@@ -77,6 +77,11 @@ function groupByDate(items: HistoryExpense[], now = new Date()) {
 }
 
 function involvement(item: HistoryExpense, myId: string) {
+  if (item.kind === "payment") {
+    if (item.payerId === myId) return { tone: "negative", text: `You paid ${peso(item.amount)}` };
+    if (item.receiverId === myId) return { tone: "positive", text: `You received ${peso(item.amount)}` };
+    return { tone: "muted", text: "Not involved" };
+  }
   if (item.payerId === myId) {
     const lent = item.amount - item.yourShare;
     return lent > 0.004
@@ -152,17 +157,18 @@ export default function HistoryPage() {
   }, [showOptions]);
 
   const filtered = useMemo(() => {
-    // Payments (settle-ups) aren't stored yet, so only expenses can match.
-    if (kind === "payments") return [];
     const query = search.trim().toLowerCase();
     const list = expenses.filter(
       (item) =>
+        (kind === "all" ||
+          (kind === "expenses" ? item.kind === "expense" : item.kind === "payment")) &&
         (groupId === "all" || item.groupId === groupId) &&
         (!onlyMine || item.involvesYou) &&
         (!query ||
           item.title.toLowerCase().includes(query) ||
           item.groupName.toLowerCase().includes(query) ||
-          item.payerName.toLowerCase().includes(query)),
+          item.payerName.toLowerCase().includes(query) ||
+          (item.receiverName ?? "").toLowerCase().includes(query)),
     );
     if (sort === "oldest") return [...list].reverse();
     if (sort === "largest") return [...list].sort((a, b) => b.amount - a.amount);
@@ -346,10 +352,12 @@ export default function HistoryPage() {
         ) : filtered.length === 0 ? (
           <section className="mn-history-empty is-filtered" aria-labelledby="history-filtered-title">
             <h2 id="history-filtered-title">
-              {kind === "payments" ? "No payments yet" : "No activity matches your filters"}
+              {kind === "payments" && !search.trim() && groupId === "all" && !onlyMine
+                ? "No payments yet"
+                : "No activity matches your filters"}
             </h2>
             <p>
-              {kind === "payments"
+              {kind === "payments" && !search.trim() && groupId === "all" && !onlyMine
                 ? "Payments you record when settling up will appear here."
                 : "Try a broader search, or reset the filters to see everything."}
             </p>
@@ -370,12 +378,19 @@ export default function HistoryPage() {
               </h2>
               <ul className="mn-history-list">
                 {section.items.map((item) => {
-                  const meta = CATEGORY_META[item.category];
+                  const isPayment = item.kind === "payment";
+                  const meta = isPayment
+                    ? { icon: "✅", label: "Payment", color: "#3DDC84" }
+                    : CATEGORY_META[item.category];
                   const who = involvement(item, userId);
                   return (
                     <li key={item.id}>
                       <Link
-                        href={`/groups/${item.groupId}?expense=${encodeURIComponent(item.id)}`}
+                        href={
+                          isPayment
+                            ? `/groups/${item.groupId}`
+                            : `/groups/${item.groupId}?expense=${encodeURIComponent(item.id)}`
+                        }
                         className="mn-history-row"
                       >
                         <span className="mn-history-icon" aria-hidden="true">
@@ -384,7 +399,9 @@ export default function HistoryPage() {
                         <span className="mn-history-text">
                           <strong>{item.title}</strong>
                           <span>
-                            {item.groupName} · Paid by {item.payerName === "You" ? "you" : item.payerName}
+                            {isPayment
+                              ? `${item.groupName} · Payment${item.paymentMethod ? ` · ${item.paymentMethod === "gcash" ? "GCash" : item.paymentMethod === "bank_transfer" ? "Bank transfer" : "Cash"}` : ""}`
+                              : `${item.groupName} · Paid by ${item.payerName === "You" ? "you" : item.payerName}`}
                           </span>
                           <small className={`is-${who.tone}`}>{who.text}</small>
                         </span>

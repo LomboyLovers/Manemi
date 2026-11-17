@@ -6,6 +6,7 @@
 
 :root {
   --mn-sidebar-width: 240px;
+  --mn-content-max: 1280px; /* main page content cap (viewports: wide) */
   --vp-wide: 1280px;
 }
 
@@ -206,4 +207,76 @@
 }
 .mn-nav-link.is-active svg {
   opacity: 1;
+}
+
+/* ---------- profile (bottom-left of the sidebar) ---------- */
+.mn-nav-profile {
+  display: none;
+}
+@media (min-width: 768px) {
+  .mn-nav-profile {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 56px;
+    padding: 8px;
+    border: 1px solid var(--mn-border, #3a3a43);
+    border-radius: 14px;
+    background: var(--mn-surface, #1c1c21);
+    color: var(--mn-text, #f5f5f7);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mn-nav-profile:disabled {
+    cursor: progress;
+  }
+  .mn-nav-profile-avatar {
+    width: 38px;
+    height: 38px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .mn-nav-profile-text {
+    min-width: 0;
+    display: grid;
+  }
+  .mn-nav-profile-text strong,
+  .mn-nav-profile-text span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .mn-nav-profile-text strong {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .mn-nav-profile-text span {
+    color: var(--mn-tertiary, #8a8a95);
+    font-size: 12px;
+  }
+  .mn-nav-profile:focus-visible {
+    outline: 2px solid var(--mn-accent-light, #c4a1ff);
+    outline-offset: 2px;
+  }
+  /* The header avatar moved to the sidebar on desktop. */
+  .mn-page-header > .mn-header-avatar {
+    display: none;
+  }
+  .mn-page-header.mn-page-header {
+    justify-content: flex-end;
+  }
+}
+@media (min-width: 768px) and (hover: hover) {
+  .mn-nav-profile:not(:disabled):hover {
+    background: var(--mn-input, #25252b);
+  }
 }

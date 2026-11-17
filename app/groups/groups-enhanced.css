@@ -8,7 +8,7 @@
 
 .manemi-groups-page .groups-page-content {
   width: 100%;
-  max-width: 920px;
+  max-width: var(--mn-content-max, 1280px);
   margin: 0 auto;
   padding: 30px 22px 145px;
   box-sizing: border-box;
@@ -361,4 +361,11 @@
 
 .manemi-rich-group-grid {
   margin-bottom: 0;
+}
+
+/* Wide screens: use the room — bigger side padding, page still capped. */
+@media (min-width: 1280px) {
+  .manemi-groups-page .groups-page-content {
+    padding-inline: 40px;
+  }
 }

@@ -437,3 +437,84 @@
     background: var(--mn-input, #25252b);
   }
 }
+
+/* ---------- destructive confirmation ---------- */
+.mn-confirm h2 {
+  margin: 4px 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.mn-confirm p {
+  margin: 0 0 20px;
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.mn-confirm .mn-popup-error {
+  margin: -8px 0 16px;
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.mn-confirm-cancel,
+.mn-confirm-destructive {
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-confirm-cancel {
+  background: var(--mn-input, #25252b);
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-confirm-destructive {
+  background: var(--mn-destructive, #e5484d);
+  color: #fff;
+}
+.mn-confirm-cancel:disabled,
+.mn-confirm-destructive:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.mn-confirm-cancel:focus-visible,
+.mn-confirm-destructive:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+
+/* ---------- status toast (auto-hides when its animation ends) ---------- */
+.mn-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 112px;
+  z-index: 90;
+  max-width: calc(100vw - 32px);
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: var(--mn-surface-2, #26262c);
+  border: 1px solid var(--mn-border, #3a3a43);
+  color: var(--mn-text, #f5f5f7);
+  font-family: var(--font-inter, Inter), Inter, Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  translate: -50% 0;
+  animation: mn-toast-life 3.2s linear forwards;
+}
+@media (min-width: 768px) {
+  .mn-toast {
+    bottom: 32px;
+  }
+}
+@keyframes mn-toast-life {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { opacity: 0; }
+}

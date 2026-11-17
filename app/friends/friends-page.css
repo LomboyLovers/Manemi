@@ -7,7 +7,7 @@
 }
 .mn-friends-content {
   width: 100%;
-  max-width: 880px;
+  max-width: var(--mn-content-max, 1280px);
   margin: 0 auto;
   padding: 24px 20px 48px;
 }
@@ -178,5 +178,11 @@
   }
   .mn-friend-row .mn-friend-actions {
     flex-direction: column;
+  }
+}
+
+@media (min-width: 1280px) {
+  .mn-friends-content {
+    padding-inline: 40px;
   }
 }

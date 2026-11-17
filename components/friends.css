@@ -72,11 +72,57 @@ label.mn-friend-row {
   cursor: default;
   opacity: 0.6;
 }
+/* Themed checkbox: rounded square, purple gradient + white tick when checked. */
 .mn-friend-row input[type="checkbox"] {
-  width: 22px;
-  height: 22px;
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   flex: none;
-  accent-color: var(--mn-accent, #8b3dff);
+  margin: 0;
+  border: 2px solid #55555c;
+  border-radius: 8px;
+  background: var(--mn-input, #25252b);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.mn-friend-row input[type="checkbox"]::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.3 4.8 9 10 3' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  transition: opacity 120ms ease;
+}
+.mn-friend-row input[type="checkbox"]:checked {
+  border-color: transparent;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+}
+.mn-friend-row input[type="checkbox"]:checked::after {
+  opacity: 1;
+}
+.mn-friend-row input[type="checkbox"]:disabled {
+  border-color: var(--mn-surface-3, #2f2f36);
+  background: var(--mn-surface-3, #2f2f36);
+  cursor: default;
+}
+.mn-friend-row input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  label.mn-friend-row:not(.is-disabled):hover input[type="checkbox"]:not(:checked) {
+    border-color: var(--mn-accent-light, #c4a1ff);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mn-friend-row input[type="checkbox"],
+  .mn-friend-row input[type="checkbox"]::after {
+    transition: none;
+  }
 }
 .mn-friend-avatar {
   width: 40px;
@@ -210,7 +256,7 @@ label.mn-friend-row {
 .mn-friends-primary:focus-visible,
 .mn-friends-secondary:focus-visible,
 .mn-friends-danger:focus-visible,
-.mn-friend-row:focus-within {
+.mn-friend-row:has(:focus-visible) {
   outline: 2px solid var(--mn-accent-light, #c4a1ff);
   outline-offset: -2px;
 }

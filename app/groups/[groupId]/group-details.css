@@ -1367,10 +1367,10 @@
 }
 @container (min-width: 960px) {
   .manemi-detail-content {
-    width: min(100%, 1180px);
+    width: min(100%, var(--mn-content-max, 1280px));
     padding: 40px 40px 64px;
     display: grid;
-    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
     /* Last row soaks up the tall right column so the left stays compact. */
     grid-template-rows: auto auto auto 1fr;
     column-gap: 40px;
@@ -1460,4 +1460,8 @@
   .md-top-actions .md-menu button:hover {
     background: rgba(255, 255, 255, 0.06);
   }
+}
+
+.md-menu .md-menu-danger {
+  color: var(--mn-negative, #ff6b6b);
 }

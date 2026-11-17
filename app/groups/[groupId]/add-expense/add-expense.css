@@ -61,15 +61,16 @@
   font-weight: 700;
 }
 .ae-amount-input input {
-  width: min(75%, 360px);
+  max-width: min(80vw, 520px);
   background: none;
   border: 0;
   outline: 0;
   color: #f5f4f8;
   font-size: clamp(38px, 9vw, 64px);
   font-weight: 700;
-  letter-spacing: -2px;
-  text-align: left;
+  letter-spacing: -1px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
   min-width: 0;
 }
 .ae-amount-input input::placeholder {
@@ -101,7 +102,7 @@
 .ae-info-box {
   border: 1px solid #34323b;
   border-radius: 17px;
-  overflow: hidden;
+  overflow: visible; /* the date popup opens below the row */
 }
 .ae-info-row {
   min-height: 65px;
@@ -383,5 +384,13 @@
   }
   .ae-share-input {
     max-width: 39%;
+  }
+}
+
+/* All categories visible on wider screens (7 chips). */
+@media (min-width: 768px) {
+  .ae-categories {
+    flex-wrap: wrap;
+    overflow: visible;
   }
 }

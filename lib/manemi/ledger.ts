@@ -30,6 +30,21 @@ export type UserBalance = {
   counterparties: Counterparty[];
 };
 
+/**
+ * A recorded payment ("payer paid receiver back"). In ledger terms it's like
+ * an expense the payer covered for the receiver, which cancels the payer's
+ * debt to the receiver.
+ */
+export function paymentEntry(
+  id: string,
+  payerId: string,
+  receiverId: string,
+  cents: number,
+  groupId = "",
+): LedgerExpense {
+  return { id, groupId, payerId, totalCents: cents, shares: [{ userId: receiverId, cents }] };
+}
+
 export function buildLedger(expenses: LedgerExpense[]) {
   // owes.get(debtor).get(creditor) = cents
   const owes = new Map<string, Map<string, number>>();
