@@ -57,6 +57,34 @@ export async function listFriends(supabase: Supabase): Promise<FriendRow[]> {
   }));
 }
 
+/** Accepted friends matching `query` (name or code), one page at a time. */
+export async function searchFriends(
+  supabase: Supabase,
+  query: string,
+  page = 1,
+  pageSize = 10,
+): Promise<{ items: FriendRow[]; total: number }> {
+  const { data, error } = await supabase.rpc("search_friends", {
+    p_query: query.trim() || null,
+    p_limit: pageSize,
+    p_offset: (page - 1) * pageSize,
+  });
+  if (error) throw new Error(cleanError(error, "Couldn't load your friends."));
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  return {
+    items: rows.map((row) => ({
+      friendshipId: String(row.friendship_id),
+      userId: String(row.user_id),
+      name: String(row.name ?? "Manemi user"),
+      userCode: String(row.user_code ?? ""),
+      avatarUrl: (row.avatar_url as string | null) ?? null,
+      direction: "friend" as const,
+      createdAt: String(row.created_at),
+    })),
+    total: Number(rows[0]?.total_count ?? 0),
+  };
+}
+
 /** By user code (U-00012, @U-00012) or email. Returns the new status. */
 export async function sendFriendRequest(supabase: Supabase, identifier: string) {
   const { data, error } = await supabase.rpc("send_friend_request", {
@@ -153,11 +181,35 @@ export async function inviteFriends(
 }
 
 /** The signed-in user's profile, for pages that don't load group data. */
-export async function loadCurrentUser(supabase: Supabase) {
+let profileCache: { userId: string; promise: Promise<CurrentProfile | null> } | null = null;
+type CurrentProfile = { id: string; name: string; email: string; handle: string };
+
+/** Clears the cached profile (after sign-out or a profile edit). */
+export function invalidateCurrentUser() {
+  profileCache = null;
+}
+
+/** The signed-in user's profile; cached per user for the session. */
+export async function loadCurrentUser(supabase: Supabase): Promise<CurrentProfile | null> {
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return null;
+  const cached = profileCache;
+  if (cached && cached.userId === user.id) return cached.promise;
+  const entry = { userId: user.id, promise: fetchProfile(supabase, user) };
+  profileCache = entry;
+  entry.promise.catch(() => {
+    if (profileCache === entry) profileCache = null;
+  });
+  return entry.promise;
+}
+
+async function fetchProfile(
+  supabase: Supabase,
+  user: { id: string; email?: string; user_metadata?: Record<string, unknown> },
+): Promise<CurrentProfile> {
   const { data } = await supabase
     .from("User")
     .select("name, userCode")

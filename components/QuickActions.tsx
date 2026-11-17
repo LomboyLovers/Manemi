@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { loadGroupsData, type GroupSummary } from "@/lib/manemi/groups";
+import { loadGroupsDataCached, type GroupSummary } from "@/lib/manemi/groups";
 import { peso } from "@/lib/manemi/format";
 import { useModalFocus } from "./useModalFocus";
 import SettleUpForm from "./SettleUpForm";
@@ -65,7 +65,7 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
   useEffect(() => {
     if (given || loaded || step === "menu" || step === "add-type" || step === "pay") return;
     let active = true;
-    loadGroupsData(createClient())
+    loadGroupsDataCached(createClient())
       .then((result) => active && setLoaded(result?.groups ?? []))
       .catch(() => active && setLoadError("Couldn't load your groups. Try again."));
     return () => {

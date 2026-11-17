@@ -3353,3 +3353,103 @@ button:disabled {
   place-items: center;
   color: var(--mn-accent-light, #c4a1ff);
 }
+
+/* Home: matching expenses (search results from the database) */
+.mn-home-match-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 16px;
+  background: var(--mn-surface, #1c1c21);
+  overflow: hidden;
+}
+.mn-home-match-list li + li {
+  border-top: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-home-match-list a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 16px;
+  color: var(--mn-text, #f5f5f7);
+  text-decoration: none;
+}
+.mn-home-match-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--mn-input, #25252b);
+}
+.mn-home-match-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.mn-home-match-text strong,
+.mn-home-match-text small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mn-home-match-text small {
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 13px;
+}
+.mn-home-match-amount {
+  font-variant-numeric: tabular-nums;
+}
+.mn-home-matches[aria-busy="true"] .mn-home-match-list {
+  opacity: 0.6;
+}
+.mn-home-match-list a:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: -2px;
+}
+@media (hover: hover) {
+  .mn-home-match-list a:hover {
+    background: var(--mn-input, #25252b);
+  }
+}
+
+/* ==========================================
+   SCROLLBARS — thin, rounded, no arrow buttons (Manemi tokens)
+   ========================================== */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-color: #3f3d48;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #6b5a8f;
+  }
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--mn-accent, #8b3dff);
+  }
+  ::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+/* Firefox (no ::-webkit-scrollbar support) */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #3f3d48 transparent;
+  }
+}

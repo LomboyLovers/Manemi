@@ -7,13 +7,16 @@ import AppNav from "@/components/AppNav";
 import QuickActions from "@/components/QuickActions";
 import PageHeader from "@/components/PageHeader";
 import {
-  loadGroupsData,
+  loadGroupsDataCached,
   type CurrentUser,
   type GroupSummary,
   type HistoryExpense,
 } from "@/lib/manemi/groups";
 import { CATEGORY_META, peso } from "@/lib/manemi/format";
-import { ACTIVITY_META, loadActivity, type ActivityItem } from "@/lib/manemi/activity";
+import { ACTIVITY_META, type ActivityItem } from "@/lib/manemi/activity";
+import { PAGE_SIZE, searchActivity, searchHistory } from "@/lib/manemi/search";
+import { useDebounced } from "@/lib/manemi/useDebounced";
+import Pagination from "@/components/Pagination";
 import CategoryIcon, { type GlyphName } from "@/components/CategoryIcon";
 import Select from "@/components/Select";
 
@@ -107,50 +110,45 @@ function involvement(item: HistoryExpense, myId: string) {
 }
 
 export default function HistoryPage() {
+  // Page shell (user + group list for the filter) comes from the shared cache;
+  // the list itself is searched and paginated in the database, 10 at a time.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [userId, setUserId] = useState("");
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [expenses, setExpenses] = useState<HistoryExpense[]>([]);
 
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
   const [kind, setKind] = useState<Kind>("all");
   const [groupId, setGroupId] = useState("all");
   const [sort, setSort] = useState<Sort>("newest");
   const [onlyMine, setOnlyMine] = useState(false);
+  const [page, setPage] = useState(1);
   const [showOptions, setShowOptions] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
   const optionsButtonRef = useRef<HTMLButtonElement>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const dataVersion = useDataVersion();
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [activityError, setActivityError] = useState("");
+
+  const [items, setItems] = useState<HistoryExpense[]>([]);
+  const [logItems, setLogItems] = useState<ActivityItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState("");
+  // Whether there's anything at all (for the first-use empty state).
+  const [everything, setEverything] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     setError("");
-    const supabase = createClient();
-    loadGroupsData(supabase)
-      .then(async (result) => {
+    loadGroupsDataCached(createClient())
+      .then((result) => {
         if (!active || !result) return;
         setUserId(result.user.id);
         setUser(result.user);
         setGroups(result.groups);
-        setExpenses(result.expenses);
-        if (result.warnings.length)
-          setError(`Some activity could not be loaded: ${result.warnings.join("; ")}`);
-        try {
-          const log = await loadActivity(supabase, result.user.id, result.groups);
-          if (active) {
-            setActivity(log);
-            setActivityError("");
-          }
-        } catch (reason) {
-          if (active) setActivityError(reason instanceof Error ? reason.message : "Couldn't load the audit log.");
-        }
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : "Unable to load history.");
@@ -162,6 +160,51 @@ export default function HistoryPage() {
       active = false;
     };
   }, [reloadKey, dataVersion]);
+
+  // New filters start again at page 1.
+  useEffect(() => {
+    setPage(1);
+  }, [kind, groupId, debouncedSearch, onlyMine, sort]);
+
+  const isLog = kind === "activity";
+
+  // One database query per page / filter change (search is debounced).
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    setListLoading(true);
+    setListError("");
+    const supabase = createClient();
+    const filters = { groupId, query: debouncedSearch, onlyMine, sort };
+    const request = isLog
+      ? searchActivity(supabase, userId, filters, page)
+      : searchHistory(supabase, userId, { ...filters, kind: kind as "all" | "expenses" | "payments" }, page);
+    request
+      .then((result) => {
+        if (!active) return;
+        if (isLog) setLogItems(result.items as ActivityItem[]);
+        else setItems(result.items as HistoryExpense[]);
+        setTotal(result.total);
+        const unfiltered = !debouncedSearch.trim() && groupId === "all" && !onlyMine && kind === "all";
+        if (unfiltered) setEverything(result.total);
+        // Deleted rows can leave us past the last page.
+        if (!result.items.length && page > 1) setPage(Math.max(1, Math.ceil(result.total / PAGE_SIZE)));
+      })
+      .catch((reason: unknown) => {
+        if (active) setListError(reason instanceof Error ? reason.message : "Couldn't load history.");
+      })
+      .finally(() => {
+        if (active) setListLoading(false);
+      });
+    return () => {
+      active = false; // a newer request replaced this one
+    };
+  }, [userId, isLog, kind, groupId, debouncedSearch, onlyMine, sort, page, reloadKey, dataVersion]);
+
+  const changePage = (next: number) => {
+    setPage(next);
+    document.querySelector(".mn-history-filters")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
 
   // Options popover: close on outside click or Escape.
   useEffect(() => {
@@ -183,56 +226,20 @@ export default function HistoryPage() {
     };
   }, [showOptions]);
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const list = expenses.filter(
-      (item) =>
-        (kind === "all" ||
-          (kind === "expenses" ? item.kind === "expense" : item.kind === "payment")) &&
-        (groupId === "all" || item.groupId === groupId) &&
-        (!onlyMine || item.involvesYou) &&
-        (!query ||
-          item.title.toLowerCase().includes(query) ||
-          item.groupName.toLowerCase().includes(query) ||
-          item.payerName.toLowerCase().includes(query) ||
-          (item.receiverName ?? "").toLowerCase().includes(query)),
-    );
-    if (sort === "oldest") return [...list].reverse();
-    if (sort === "largest") return [...list].sort((a, b) => b.amount - a.amount);
-    return list;
-  }, [expenses, kind, groupId, onlyMine, search, sort]);
-
-  const isLog = kind === "activity";
-  const filteredLog = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const list = activity.filter(
-      (item) =>
-        (groupId === "all" || item.groupId === groupId) &&
-        (!onlyMine || item.involvesYou) &&
-        (!query ||
-          item.title.toLowerCase().includes(query) ||
-          item.detail.toLowerCase().includes(query) ||
-          item.groupName.toLowerCase().includes(query)),
-    );
-    if (sort === "oldest") return [...list].reverse();
-    if (sort === "largest") return [...list].sort((a, b) => b.amount - a.amount);
-    return list;
-  }, [activity, groupId, onlyMine, search, sort]);
+  // Sections follow the order the database returned.
   const logSections = useMemo(
     () =>
       sort === "largest"
-        ? [{ key: "largest", label: "LARGEST FIRST", items: filteredLog }]
-        : groupByDate(filteredLog),
-    [filteredLog, sort],
+        ? [{ key: "largest", label: "LARGEST FIRST", items: logItems }]
+        : groupByDate(logItems),
+    [logItems, sort],
   );
-
-  // Sections follow the list order, so "oldest first" needs no extra work.
   const sections = useMemo(
     () =>
       sort === "largest"
-        ? [{ key: "largest", label: "LARGEST FIRST", items: filtered }]
-        : groupByDate(filtered),
-    [filtered, sort],
+        ? [{ key: "largest", label: "LARGEST FIRST", items }]
+        : groupByDate(items),
+    [items, sort],
   );
 
   const filtersActive =
@@ -246,11 +253,8 @@ export default function HistoryPage() {
   };
   const closeAdd = useCallback(() => setShowAdd(false), []);
 
-  const groupOptions = groups.filter(
-    (group) =>
-      expenses.some((item) => item.groupId === group.id) ||
-      activity.some((item) => item.groupId === group.id),
-  );
+  const groupOptions = groups;
+  const noFilters = !debouncedSearch.trim() && groupId === "all" && !onlyMine;
 
   return (
     <main className="mn-app-page mn-history">
@@ -379,16 +383,16 @@ export default function HistoryPage() {
           </div>
         )}
 
-        {isLog && !loading && activityError && (
+        {!loading && listError && (
           <div className="mn-history-error" role="alert">
-            <span>{activityError}</span>
+            <span>{listError}</span>
             <button type="button" onClick={() => setReloadKey((key) => key + 1)}>
               Try again
             </button>
           </div>
         )}
 
-        {loading ? (
+        {loading || (listLoading && (isLog ? !logItems.length : !items.length)) ? (
           <section className="mn-history-section" aria-busy="true" aria-label="Loading history">
             <div className="mn-history-label mn-skeleton-line" />
             <div className="mn-history-list">
@@ -401,18 +405,18 @@ export default function HistoryPage() {
             </div>
           </section>
         ) : isLog ? (
-          filteredLog.length === 0 ? (
+          logItems.length === 0 ? (
             <section className="mn-history-empty is-filtered" aria-labelledby="log-empty-title">
               <h2 id="log-empty-title">
-                {activity.length ? "No activity matches your filters" : "No activity yet"}
+                {noFilters ? "No activity yet" : "No activity matches your filters"}
               </h2>
               <p>
-                {activity.length
-                  ? "Try a broader search, or reset the filters to see everything."
-                  : "When anyone adds, edits or deletes an expense, or records a payment, it's logged here."}
+                {noFilters
+                  ? "When anyone adds, edits or deletes an expense, or records a payment, it's logged here."
+                  : "Try a broader search, or reset the filters to see everything."}
               </p>
               <div className="mn-history-empty-actions">
-                {activity.length > 0 && (
+                {!noFilters && (
                   <button type="button" className="mn-button-primary" onClick={() => { clearFilters(); setKind("activity"); }}>
                     Clear all filters
                   </button>
@@ -423,7 +427,8 @@ export default function HistoryPage() {
               </div>
             </section>
           ) : (
-            logSections.map((section) => (
+            <div className={`mn-history-results ${listLoading ? "is-busy" : ""}`} aria-busy={listLoading}>
+            {logSections.map((section) => (
               <section key={section.key} className="mn-history-section" aria-labelledby={`l-${section.key}`}>
                 <h2 id={`l-${section.key}`} className="mn-history-label">
                   {section.label}
@@ -484,9 +489,11 @@ export default function HistoryPage() {
                   })}
                 </ul>
               </section>
-            ))
+            ))}
+            <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={changePage} busy={listLoading} />
+            </div>
           )
-        ) : expenses.length === 0 ? (
+        ) : everything === 0 && kind === "all" && noFilters ? (
           <section className="mn-history-empty" aria-labelledby="history-empty-title">
             <div className="mn-history-empty-icon" aria-hidden="true">
               <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -500,7 +507,7 @@ export default function HistoryPage() {
               <span aria-hidden="true">+</span> Add Expense
             </button>
           </section>
-        ) : filtered.length === 0 ? (
+        ) : items.length === 0 ? (
           <section className="mn-history-empty is-filtered" aria-labelledby="history-filtered-title">
             <h2 id="history-filtered-title">
               {kind === "payments" && !search.trim() && groupId === "all" && !onlyMine
@@ -522,7 +529,8 @@ export default function HistoryPage() {
             </div>
           </section>
         ) : (
-          sections.map((section) => (
+          <div className={`mn-history-results ${listLoading ? "is-busy" : ""}`} aria-busy={listLoading}>
+          {sections.map((section) => (
             <section key={section.key} className="mn-history-section" aria-labelledby={`h-${section.key}`}>
               <h2 id={`h-${section.key}`} className="mn-history-label">
                 {section.label}
@@ -581,7 +589,9 @@ export default function HistoryPage() {
                 })}
               </ul>
             </section>
-          ))
+          ))}
+          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={changePage} busy={listLoading} />
+          </div>
         )}
       </div>
 

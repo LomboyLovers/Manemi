@@ -13,13 +13,15 @@ import "./groups-balance-card.css";
 import GroupsSkeleton from "@/components/GroupSkeleton";
 import PageHeader, { HeaderButton } from "@/components/PageHeader";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
-import LeaveGroupDialog from "@/components/LeaveGroupDialog";
+import LeaveGroupDialog, { type LeaveBalance } from "@/components/LeaveGroupDialog";
 import Select from "@/components/Select";
 import Icon, { type IconName } from "@/components/Icon";
 import AppNav from "@/components/AppNav";
-import { useDataVersion } from "@/lib/manemi/events";
+import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
+import { searchGroupIds } from "@/lib/manemi/search";
+import { useDebounced } from "@/lib/manemi/useDebounced";
 import {
-  loadGroupsData,
+  loadGroupsDataCached,
   totalsFor,
   type CurrentUser,
   type GroupSummary,
@@ -81,14 +83,13 @@ export default function GroupsPage() {
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [initialPageLoading, setInitialPageLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
-  const [refreshGroups, setRefreshGroups] = useState(0);
   const dataVersion = useDataVersion();
   const [activeFilter, setActiveFilter] = useState("All");
   const [groupMenu, setGroupMenu] = useState<string | null>(null);
   const [archiveGroupId, setArchiveGroupId] = useState<string | null>(null);
   const [archivingGroup, setArchivingGroup] = useState(false);
   const [archiveError, setArchiveError] = useState("");
-  const [leaveGroup, setLeaveGroup] = useState<{ id: string; name: string } | null>(null);
+  const [leaveGroup, setLeaveGroup] = useState<{ id: string; name: string; balances: LeaveBalance[] } | null>(null);
   const [notice, setNotice] = useState("");
   const [createdGroup, setCreatedGroup] = useState<{
     id: string;
@@ -150,7 +151,7 @@ export default function GroupsPage() {
         );
 
       setArchiveGroupId(null);
-      setRefreshGroups((previous) => previous + 1);
+      notifyDataChanged();
     } catch (error) {
       setArchiveError(
         error instanceof Error
@@ -230,7 +231,7 @@ export default function GroupsPage() {
       setGroupEmoji("plane");
       setGroupCurrency("PHP");
 
-      setRefreshGroups((previous) => previous + 1);
+      notifyDataChanged();
       if (!newId)
         setGroupsError(
           "Group created. Open its ••• menu and choose Invite Friends.",
@@ -256,7 +257,7 @@ export default function GroupsPage() {
 
     async function loadGroups() {
       try {
-        const result = await loadGroupsData(createClient());
+        const result = await loadGroupsDataCached(createClient());
         if (!active) return;
         if (result) {
           setUser(result.user);
@@ -285,15 +286,37 @@ export default function GroupsPage() {
     return () => {
       active = false;
     };
-  }, [refreshGroups, dataVersion]);
+  }, [dataVersion]);
 
-  // Search runs in memory: no network calls while typing.
-  const visibleGroups = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return query
-      ? groups.filter((group) => group.name.toLowerCase().includes(query))
-      : groups;
-  }, [groups, search]);
+  // Search runs in the database (group names and expense titles), 300ms
+  // after typing stops; the cards keep their already-computed balances.
+  const query = useDebounced(search.trim(), 300);
+  const [matchIds, setMatchIds] = useState<Set<string> | null>(null);
+  const [searchError, setSearchError] = useState("");
+  useEffect(() => {
+    if (!query) {
+      setMatchIds(null);
+      setSearchError("");
+      return;
+    }
+    let active = true;
+    searchGroupIds(createClient(), query)
+      .then((ids) => {
+        if (!active) return;
+        setMatchIds(ids);
+        setSearchError("");
+      })
+      .catch((reason: unknown) => {
+        if (active) setSearchError(reason instanceof Error ? reason.message : "Search failed. Try again.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [query, dataVersion]);
+  const visibleGroups = useMemo(
+    () => (matchIds ? groups.filter((group) => matchIds.has(group.id)) : groups),
+    [groups, matchIds],
+  );
 
   const totals = useMemo(() => totalsFor(groups), [groups]);
   const netTone = balanceTone(totals.net);
@@ -315,7 +338,7 @@ export default function GroupsPage() {
           <>
             <PageHeader
               user={user}
-              onNotificationsChange={() => setRefreshGroups((value) => value + 1)}
+              onNotificationsChange={notifyDataChanged}
             >
               <HeaderButton label="Create group" onClick={() => setShowCreateModal(true)}>
                 <PeoplePlusIcon />
@@ -396,7 +419,8 @@ export default function GroupsPage() {
               <input
                 id="manemi-rich-search"
                 type="search"
-                placeholder="Search your groups"
+                placeholder="Search groups or expenses"
+                aria-label="Search groups or expenses"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -504,9 +528,14 @@ export default function GroupsPage() {
                 Categories are not saved yet. Choose All to see every group.
               </p>
             )}
-            {visibleGroups.length === 0 && search && (
-              <p className="manemi-rich-filter-note">
-                No groups match your search.
+            {searchError && (
+              <p className="manemi-rich-filter-note" role="alert">
+                {searchError}
+              </p>
+            )}
+            {visibleGroups.length === 0 && matchIds && (
+              <p className="manemi-rich-filter-note" role="status">
+                No groups or expenses match “{query}”.
               </p>
             )}
             {(
@@ -723,10 +752,13 @@ export default function GroupsPage() {
               </span>
             </header>
             <div className="manemi-actions-list">
-              {selectedGroup.canInvite && (
+              {!selectedGroup.isArchived && (
                 <button
                   type="button"
+                  aria-disabled={!selectedGroup.canInvite || undefined}
+                  className={selectedGroup.canInvite ? "" : "manemi-action-disabled"}
                   onClick={() => {
+                    if (!selectedGroup.canInvite) return;
                     setGroupMenu(null);
                     setInviteGroup({
                       id: selectedGroup.id,
@@ -738,7 +770,12 @@ export default function GroupsPage() {
                   <span className="manemi-action-symbol" aria-hidden="true">
                     ＋
                   </span>
-                  Invite Friends
+                  <span>
+                    Invite Friends
+                    {!selectedGroup.canInvite && (
+                      <small className="manemi-action-hint">Only the owner or an admin can invite</small>
+                    )}
+                  </span>
                   <span className="manemi-action-chevron" aria-hidden="true">
                     ›
                   </span>
@@ -781,7 +818,11 @@ export default function GroupsPage() {
                   type="button"
                   onClick={() => {
                     setGroupMenu(null);
-                    setLeaveGroup({ id: selectedGroup.id, name: selectedGroup.name });
+                    setLeaveGroup({
+                      id: selectedGroup.id,
+                      name: selectedGroup.name,
+                      balances: selectedGroup.counterparties,
+                    });
                   }}
                 >
                   <span className="manemi-action-symbol" aria-hidden="true">
@@ -806,11 +847,13 @@ export default function GroupsPage() {
         <LeaveGroupDialog
           groupId={leaveGroup.id}
           groupName={leaveGroup.name}
+          balances={leaveGroup.balances}
+          onSettle={() => router.push(`/groups/${leaveGroup.id}?settle=1`)}
           onClose={() => setLeaveGroup(null)}
           onLeft={() => {
             setNotice(`You left ${leaveGroup.name}.`);
             setLeaveGroup(null);
-            setRefreshGroups((value) => value + 1);
+            notifyDataChanged();
           }}
         />
       )}

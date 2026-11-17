@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   inviteFriends,
-  listFriends,
+  searchFriends,
   pendingInviteeIds,
   type FriendRow,
 } from "@/lib/manemi/friends";
@@ -13,6 +13,7 @@ import { initialOf } from "@/lib/manemi/format";
 import { useModalFocus } from "./useModalFocus";
 import "./popups.css";
 import "./friends.css";
+import { useDebounced } from "@/lib/manemi/useDebounced";
 
 type Props = {
   groupId: string;
@@ -33,18 +34,34 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const query = useDebounced(search.trim(), 300);
+  // Total friends (unfiltered), to decide whether to show the search box.
+  const [allCount, setAllCount] = useState<number | null>(null);
+  // Names of everyone shown so far, for the "Invited …" message.
+  const namesRef = useRef(new Map<string, string>());
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let active = true;
-    const supabase = createClient();
-    Promise.all([listFriends(supabase), pendingInviteeIds(supabase, groupId)])
-      .then(([rows, invited]) => {
+    pendingInviteeIds(createClient(), groupId)
+      .then((invited) => active && setPending(invited))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [groupId]);
+
+  // Friends come from the database, searched as you type (debounced).
+  useEffect(() => {
+    let active = true;
+    searchFriends(createClient(), query, 1, 50)
+      .then((result) => {
         if (!active) return;
-        setFriends(rows.filter((row) => row.direction === "friend"));
-        setPending(invited);
+        for (const friend of result.items) namesRef.current.set(friend.userId, friend.name);
+        setFriends(result.items);
+        if (!query) setAllCount(result.total);
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : "Couldn't load your friends.");
@@ -52,18 +69,10 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
     return () => {
       active = false;
     };
-  }, [groupId]);
+  }, [query]);
 
   const members = useMemo(() => new Set(memberIds), [memberIds]);
-  const visible = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return (friends ?? []).filter(
-      (friend) =>
-        !query ||
-        friend.name.toLowerCase().includes(query) ||
-        friend.userCode.toLowerCase().includes(query),
-    );
-  }, [friends, search]);
+  const visible = friends ?? [];
 
   function toggle(userId: string) {
     setSelected((current) => {
@@ -82,7 +91,7 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
     try {
       const results = await inviteFriends(createClient(), groupId, [...selected]);
       const invited = results.filter((result) => result.status === "invited").map((result) => result.userId);
-      const nameOf = (id: string) => friends?.find((friend) => friend.userId === id)?.name ?? "a friend";
+      const nameOf = (id: string) => namesRef.current.get(id) ?? "a friend";
       setPending((current) => new Set([...current, ...invited]));
       setSelected(new Set());
       setNotice(
@@ -124,7 +133,7 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
 
         {friends === null && !error ? (
           <p className="mn-friends-state" aria-busy="true">Loading your friends…</p>
-        ) : friends && friends.length === 0 ? (
+        ) : allCount === 0 ? (
           <div className="mn-friends-empty">
             <strong>No friends yet</strong>
             <p>Only friends can be invited to groups. Add friends by their user code or email first.</p>
@@ -134,7 +143,7 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
           </div>
         ) : (
           <>
-            {(friends?.length ?? 0) > 6 && (
+            {((allCount ?? 0) > 6 || search) && (
               <div className="mn-friends-search">
                 <label htmlFor="invite-friends-search" className="mn-visually-hidden">
                   Search friends
@@ -178,7 +187,7 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
                 );
               })}
               {visible.length === 0 && (
-                <li className="mn-friends-state">No friends match “{search}”.</li>
+                <li className="mn-friends-state">No friends match “{query}”.</li>
               )}
             </ul>
           </>

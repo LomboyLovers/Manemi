@@ -61,7 +61,7 @@ export default function Select({ value, onChange, options, label, id, variant = 
       // Wide enough for the longest label (roughly), never narrower than the trigger.
       const longest = Math.max(...options.map((option) => option.label.length + (option.icon ? 4 : 0)));
       const width = Math.min(Math.max(rect.width, 220, longest * 8.5 + 64), 360, window.innerWidth - 32);
-      const wanted = Math.min(options.length * 48 + 12, 320);
+      const wanted = Math.min(options.length * 46 + 14, 380);
       const spaceBelow = window.innerHeight - rect.bottom - 16;
       const above = spaceBelow < Math.min(wanted, 200) && rect.top > spaceBelow;
       const maxHeight = Math.min(wanted, above ? rect.top - 16 : spaceBelow);

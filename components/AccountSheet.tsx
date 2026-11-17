@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { initialOf } from "@/lib/manemi/format";
+import { invalidateGroupsData } from "@/lib/manemi/groups";
+import { invalidateCurrentUser } from "@/lib/manemi/friends";
 import { useModalFocus } from "./useModalFocus";
 import "./popups.css";
 
@@ -30,6 +32,8 @@ export default function AccountSheet({ name, email, handle, onClose }: Props) {
       setSigningOut(false);
       return;
     }
+    invalidateGroupsData();
+    invalidateCurrentUser();
     router.replace("/");
     router.refresh();
   }

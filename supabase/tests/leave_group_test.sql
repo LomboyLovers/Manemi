@@ -54,24 +54,36 @@ select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
 select pg_temp.fails($$select public.leave_group((select id from g))$$, 'own this group', 'owner cannot leave');
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
-select pg_temp.fails($$select public.leave_group((select id from g))$$, 'Settle up', 'member who owes money cannot leave');
+select pg_temp.fails($$select public.leave_group((select id from g))$$, 'still owe 1 person', 'member who owes money cannot leave');
+select pg_temp.fails($$select public.leave_group((select id from g), true)$$, 'still owe', 'confirming does not let a debtor leave');
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000d');
 select pg_temp.check((public.leave_group((select id from g))->>'left')::boolean, 'member who paid back in full can leave');
 select pg_temp.check(not public.is_group_member((select id from g)), 'they are no longer a member');
 select pg_temp.fails($$select public.leave_group((select id from g))$$, 'not a member', 'cannot leave twice');
 
+reset role;
+-- Cat pays ₱100 split with Ben: Ben now owes Cat 50.
+select public.create_expense_with_splits('00000000-0000-0000-0000-00000000000c', (select id from g),
+  '00000000-0000-0000-0000-00000000000c', 'Snacks', 100, now(), 'food',
+  null, '[{"userId":"00000000-0000-0000-0000-00000000000c","amount":50},{"userId":"00000000-0000-0000-0000-00000000000b","amount":50}]');
+set role authenticated;
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
-select pg_temp.check((public.leave_group((select id from g))->>'left')::boolean, 'member who was paid back can leave');
+select pg_temp.fails($$select public.leave_group((select id from g))$$, '1 person still owes you', 'someone who is owed must confirm first');
+select pg_temp.check(public.is_group_member((select id from g)), 'still a member after the refusal');
+select pg_temp.check((public.leave_group((select id from g), true)->>'leftCollectibles')::boolean, 'after confirming, they leave with collectibles');
+select pg_temp.check(not public.is_group_member((select id from g)), 'Cat left');
 reset role;
 
--- Ben pays Ana back; now Ben can leave.
+-- Ben pays Ana and Cat back; now Ben can leave.
 insert into public."Settlement" ("groupId", "payerId", "receiverId", amount)
 select id, '00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000a', 150 from g;
+insert into public."Settlement" ("groupId", "payerId", "receiverId", amount)
+select id, '00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c', 50 from g;
 set role authenticated;
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
 select pg_temp.check((public.leave_group((select id from g))->>'left')::boolean, 'after settling up, member can leave');
 reset role;
 
-select pg_temp.check((select count(*) from public."Expense") = 2, 'expenses stay in the group history');
+select pg_temp.check((select count(*) from public."Expense") = 3, 'expenses stay in the group history');
 \echo ALL LEAVE GROUP TESTS PASSED

@@ -2,10 +2,7 @@
 // or payment is created, edited, deleted or cancelled) and turns each row into
 // a sentence for the History page.
 
-import type { createClient } from "@/lib/supabase/client";
 import { peso } from "./format.ts";
-
-type Supabase = ReturnType<typeof createClient>;
 
 export type ActivityAction =
   | "expense_created"
@@ -34,7 +31,7 @@ export type ActivityItem = {
   involvesYou: boolean;
 };
 
-type Row = {
+export type ActivityRow = {
   activityId: string;
   groupId: string;
   actorId: string | null;
@@ -63,7 +60,7 @@ const num = (value: unknown) => {
 const str = (value: unknown) => (typeof value === "string" ? value : "");
 
 /** Turns one log row into readable text. `name(id)` resolves user names. */
-export function describeActivity(row: Row, name: (id: string | null) => string) {
+export function describeActivity(row: ActivityRow, name: (id: string | null) => string) {
   const d = row.details ?? {};
   const actor = name(row.actorId);
   const changes = (d.changes ?? {}) as Record<string, { from?: unknown; to?: unknown }>;
@@ -112,57 +109,4 @@ export function describeActivity(row: Row, name: (id: string | null) => string) 
   if (row.action === "settlement_updated")
     return { title: `${actor} edited a payment`, detail: changeText || who, amount };
   return { title: `${actor} cancelled a payment`, detail: who, amount };
-}
-
-/** Latest activity across the given groups (newest first, up to `limit`). */
-export async function loadActivity(
-  supabase: Supabase,
-  me: string,
-  groups: Array<{ id: string; name: string }>,
-  limit = 300,
-): Promise<ActivityItem[]> {
-  if (!groups.length) return [];
-  const { data, error } = await supabase
-    .from("Group_Activity")
-    .select("activityId, groupId, actorId, action, entityType, entityId, details, createdAt")
-    .in("groupId", groups.map((group) => group.id))
-    .order("createdAt", { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(`Couldn't load the audit log: ${error.message}`);
-  const rows = (data ?? []) as Row[];
-
-  const ids = new Set<string>();
-  for (const row of rows) {
-    if (row.actorId) ids.add(row.actorId);
-    for (const key of ["paidBy", "payerId", "receiverId"]) {
-      const value = str(row.details?.[key]);
-      if (value) ids.add(value);
-    }
-  }
-  const names = new Map<string, string>();
-  if (ids.size) {
-    const { data: users } = await supabase.from("User").select("userId, name").in("userId", [...ids]);
-    for (const user of (users ?? []) as Array<{ userId: string; name: string | null }>)
-      names.set(user.userId, String(user.name ?? "").trim() || "Someone");
-  }
-  const name = (id: string | null) => (!id ? "Someone" : id === me ? "You" : names.get(id) ?? "A former member");
-  const groupName = new Map(groups.map((group) => [group.id, group.name]));
-
-  return rows.map((row) => {
-    const text = describeActivity(row, name);
-    const d = row.details ?? {};
-    return {
-      id: row.activityId,
-      groupId: row.groupId,
-      groupName: groupName.get(row.groupId) ?? "Group",
-      action: row.action,
-      entityType: row.entityType,
-      entityId: row.entityId,
-      actorId: row.actorId,
-      actorName: name(row.actorId),
-      ...text,
-      date: row.createdAt,
-      involvesYou: [row.actorId, d.paidBy, d.payerId, d.receiverId].includes(me),
-    };
-  });
 }
