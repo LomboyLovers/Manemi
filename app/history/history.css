@@ -594,3 +594,12 @@
     opacity: 1;
   }
 }
+
+/* While the next page loads, keep the current one visible but dimmed. */
+.mn-history-results {
+  transition: opacity 120ms linear;
+}
+.mn-history-results.is-busy {
+  opacity: 0.55;
+  pointer-events: none;
+}

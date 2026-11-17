@@ -142,13 +142,42 @@ function startOfWeek(now: Date) {
 const toPesos = (cents: number) => cents / 100;
 
 /** Returns null when nobody is signed in. Throws on a fatal load error. */
-export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | null> {
+// ---- In-memory cache -------------------------------------------------------
+// Home, Groups, History and the quick actions all need the same data. Moving
+// between them reuses one load for a short while instead of refetching
+// everything; any change in the app (notifyDataChanged) clears it.
+const CACHE_MS = 30_000;
+let cache: { userId: string; at: number; promise: Promise<GroupsData | null> } | null = null;
+
+export function invalidateGroupsData() {
+  cache = null;
+}
+
+/** loadGroupsData, shared across pages for CACHE_MS (per signed-in user). */
+export async function loadGroupsDataCached(supabase: Supabase): Promise<GroupsData | null> {
   const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) return null;
-  const me = user;
+    data: { session },
+  } = await supabase.auth.getSession();
+  const userId = session?.user.id ?? "";
+  if (cache && cache.userId === userId && Date.now() - cache.at < CACHE_MS) return cache.promise;
+  const promise = loadGroupsData(supabase);
+  const entry = { userId, at: Date.now(), promise };
+  cache = entry;
+  promise.catch(() => {
+    if (cache === entry) cache = null; // never keep a failed load
+  });
+  return promise;
+}
+
+export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | null> {
+  // The session is read locally (no auth round trip); every query below is
+  // still checked by the database with the session's token (RLS).
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session?.user) return null;
+  const me = session.user;
 
   const [membershipsResult, ownedResult, profileResult] = await Promise.all([
     supabase.from("Group_Member").select("groupId").eq("userId", me.id),

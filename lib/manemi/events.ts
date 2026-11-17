@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { invalidateGroupsData } from "./groups";
 
 const EVENT = "manemi:data-changed";
 
 /** Tell every open page that balances/expenses changed (e.g. a payment was recorded). */
 export function notifyDataChanged() {
+  invalidateGroupsData();
   if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENT));
 }
 

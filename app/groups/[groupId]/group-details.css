@@ -1462,7 +1462,7 @@
   }
 }
 
-.md-menu .md-menu-danger {
+.md-top-actions .md-menu .md-menu-danger {
   color: var(--mn-negative, #ff6b6b);
 }
 
@@ -1497,8 +1497,11 @@
   background: var(--mn-input, #25252b);
   color: var(--mn-text, #f5f5f7);
 }
+/* Nothing to settle: clearly greyed out */
 .md-action-secondary:disabled {
-  opacity: 0.6;
+  border-color: var(--mn-surface-3, #2f2f36);
+  background: var(--mn-surface-2, #26262c);
+  color: var(--mn-tertiary, #6c6c76);
   cursor: not-allowed;
 }
 .md-action-primary span,
@@ -1566,4 +1569,13 @@
 .md-notice-check {
   display: grid;
   place-items: center;
+}
+
+/* Invite Friends shown to members, but unavailable */
+.md-top-actions .md-menu .md-menu-disabled {
+  color: var(--mn-tertiary, #6c6c76);
+  cursor: not-allowed;
+}
+.md-top-actions .md-menu .md-menu-disabled:hover {
+  background: transparent;
 }

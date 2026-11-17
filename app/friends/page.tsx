@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppNav from "@/components/AppNav";
+import Pagination from "@/components/Pagination";
+import { useDebounced } from "@/lib/manemi/useDebounced";
 import Icon from "@/components/Icon";
 import PageHeader from "@/components/PageHeader";
 import { useModalFocus } from "@/components/useModalFocus";
@@ -10,6 +12,7 @@ import type { CurrentUser } from "@/lib/manemi/groups";
 import {
   listFriends,
   loadCurrentUser,
+  searchFriends,
   removeFriendship,
   respondFriendRequest,
   sendFriendRequest,
@@ -32,6 +35,12 @@ export default function FriendsPage() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const query = useDebounced(search.trim(), 300);
+  const [friendPage, setFriendPage] = useState(1);
+  const [friendItems, setFriendItems] = useState<FriendRow[]>([]);
+  const [friendTotal, setFriendTotal] = useState(0);
+  const [friendsLoading, setFriendsLoading] = useState(true);
+  const [friendsVersion, setFriendsVersion] = useState(0);
   const [confirmRemove, setConfirmRemove] = useState<FriendRow | null>(null);
   const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,6 +52,7 @@ export default function FriendsPage() {
       setUser(me);
       setRows(friends);
       setLoadError("");
+      setFriendsVersion((value) => value + 1); // refresh the searched page too
     } catch (reason) {
       setLoadError(reason instanceof Error ? reason.message : "Couldn't load your friends.");
       setRows((current) => current ?? []);
@@ -56,14 +66,31 @@ export default function FriendsPage() {
   const friends = useMemo(() => (rows ?? []).filter((row) => row.direction === "friend"), [rows]);
   const incoming = useMemo(() => (rows ?? []).filter((row) => row.direction === "incoming"), [rows]);
   const outgoing = useMemo(() => (rows ?? []).filter((row) => row.direction === "outgoing"), [rows]);
-  const visibleFriends = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return query
-      ? friends.filter(
-          (row) => row.name.toLowerCase().includes(query) || row.userCode.toLowerCase().includes(query),
-        )
-      : friends;
-  }, [friends, search]);
+  // The friends list is searched and paginated in the database (10 a page).
+  useEffect(() => {
+    setFriendPage(1);
+  }, [query]);
+  useEffect(() => {
+    let active = true;
+    setFriendsLoading(true);
+    searchFriends(createClient(), query, friendPage)
+      .then((result) => {
+        if (!active) return;
+        setFriendItems(result.items);
+        setFriendTotal(result.total);
+        if (!result.items.length && friendPage > 1) setFriendPage(Math.max(1, Math.ceil(result.total / 10)));
+      })
+      .catch((reason: unknown) => {
+        if (active) setLoadError(reason instanceof Error ? reason.message : "Couldn't load your friends.");
+      })
+      .finally(() => {
+        if (active) setFriendsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [query, friendPage, friendsVersion]);
+  const visibleFriends = friendItems;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -249,7 +276,7 @@ export default function FriendsPage() {
             <h2 id="friends-list-title" className="mn-friends-label">
               Friends{loading ? "" : ` · ${friends.length}`}
             </h2>
-            {friends.length > 6 && (
+            {(friends.length > 6 || search) && (
               <div className="mn-friends-search">
                 <label htmlFor="friends-search" className="mn-visually-hidden">
                   Search friends
@@ -265,8 +292,8 @@ export default function FriendsPage() {
             )}
           </div>
 
-          <ul className="mn-friends-list" aria-busy={loading}>
-            {loading ? (
+          <ul className="mn-friends-list" aria-busy={loading || friendsLoading}>
+            {loading || (friendsLoading && !friendItems.length && friends.length > 0) ? (
               [1, 2, 3].map((item) => (
                 <li key={item} aria-hidden="true">
                   <div className="mn-friend-row">
@@ -286,9 +313,9 @@ export default function FriendsPage() {
                   Add a Friend
                 </button>
               </li>
-            ) : visibleFriends.length === 0 ? (
+            ) : visibleFriends.length === 0 && query ? (
               <li className="mn-friends-empty">
-                <strong>No friends match “{search}”</strong>
+                <strong>No friends match “{query}”</strong>
                 <p>Try a different name or code.</p>
                 <button type="button" className="mn-friends-secondary" onClick={() => setSearch("")}>
                   Clear Search
@@ -319,6 +346,14 @@ export default function FriendsPage() {
               ))
             )}
           </ul>
+          <Pagination
+            page={friendPage}
+            total={friendTotal}
+            pageSize={10}
+            onChange={setFriendPage}
+            noun="friends"
+            busy={friendsLoading}
+          />
         </section>
 
         {outgoing.length > 0 && (

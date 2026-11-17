@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -11,8 +11,9 @@ import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog from "@/components/LeaveGroupDialog";
 import SettleUpSheet from "@/components/SettleUpSheet";
 import CategoryIcon from "@/components/CategoryIcon";
+import Pagination from "@/components/Pagination";
 import Icon from "@/components/Icon";
-import { useDataVersion } from "@/lib/manemi/events";
+import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
 import { CATEGORY_META, categoryKey, isZero, peso } from "@/lib/manemi/format";
 import { buildLedger, paymentEntry, sharesFromSplitRows } from "@/lib/manemi/ledger";
 
@@ -66,6 +67,8 @@ export default function GroupDetailsPage() {
   const [settleWith, setSettleWith] = useState<string | null>(null);
   const dataVersion = useDataVersion();
   const [activeCategory, setActiveCategory] = useState("All");
+  const [expensePage, setExpensePage] = useState(1);
+  const EXPENSES_PER_PAGE = 10;
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingExpense, setDeletingExpense] = useState(false);
@@ -73,22 +76,28 @@ export default function GroupDetailsPage() {
   const [expenseNotice, setExpenseNotice] = useState("");
   const [addedExpense, setAddedExpense] = useState<Expense | null>(null);
   const [expenseSheetClosing, setExpenseSheetClosing] = useState(false);
-  const [refreshExpenses, setRefreshExpenses] = useState(0);
   const [activeTab, setActiveTab] = useState<"expenses" | "balances">(
     "expenses",
   );
   const [balanceError, setBalanceError] = useState("");
 
+  // Skeleton only for the first load of a group; refreshes (after a payment,
+  // a delete, ...) update in place instead of flashing the skeleton.
+  const loadedGroupRef = useRef<string | null>(null);
+
   useEffect(() => {
     let active = true;
 
     async function loadGroup() {
-      setLoading(true);
+      if (loadedGroupRef.current !== params.groupId) setLoading(true);
       setError("");
 
       const supabase = createClient();
 
-      const { data: auth, error: authError } = await supabase.auth.getUser();
+      // Local session read (no auth round trip); the queries below are still
+      // checked by the database with this session's token.
+      const { data: sessionData, error: authError } = await supabase.auth.getSession();
+      const auth = { user: sessionData.session?.user ?? null };
 
       if (!active) return;
 
@@ -256,6 +265,16 @@ export default function GroupDetailsPage() {
         }
       }
 
+      // Groups page → Leave Group → "Settle Debts" lands here with ?settle=1.
+      const query = new URLSearchParams(window.location.search);
+      if (query.get("settle")) {
+        setSettleWith("");
+        query.delete("settle");
+        const rest = query.toString();
+        window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+      }
+
+      loadedGroupRef.current = params.groupId;
       setLoading(false);
     }
 
@@ -264,7 +283,7 @@ export default function GroupDetailsPage() {
     return () => {
       active = false;
     };
-  }, [params.groupId, refreshExpenses, dataVersion]);
+  }, [params.groupId, dataVersion]);
 
   const canInvite =
     Boolean(group) && !group?.isArchived && (myRole === "owner" || myRole === "admin");
@@ -395,7 +414,7 @@ export default function GroupDetailsPage() {
       setShowDeleteConfirm(false);
       setSelectedExpense(null);
       setExpenseSheetClosing(false);
-      setRefreshExpenses((previous) => previous + 1);
+      notifyDataChanged(); // reloads this page and clears cached totals
       setExpenseNotice(`Deleted "${deletedTitle}" successfully.`);
     } catch (error) {
       setExpenseActionError(
@@ -427,6 +446,11 @@ export default function GroupDetailsPage() {
     activeCategory === "All"
       ? expenses
       : expenses.filter((expense) => expense.category === activeCategory);
+  // Stay on a real page after deletes shrink the list.
+  const expensePageNow = Math.min(
+    expensePage,
+    Math.max(1, Math.ceil(filteredExpenses.length / EXPENSES_PER_PAGE)),
+  );
 
   const categoryIcon = (category: string | null, size = 22) => (
     <CategoryIcon name={categoryKey(category)} size={size} />
@@ -497,11 +521,15 @@ export default function GroupDetailsPage() {
 
               {menuOpen && (
                 <div className="md-menu" role="menu">
-                  {canInvite && (
+                  {group && !group.isArchived && (
                     <button
                       type="button"
                       role="menuitem"
+                      aria-disabled={!canInvite || undefined}
+                      aria-describedby={canInvite ? undefined : "md-invite-note"}
+                      className={canInvite ? "" : "md-menu-disabled"}
                       onClick={() => {
+                        if (!canInvite) return;
                         setMenuOpen(false);
                         setInviteOpen(true);
                       }}
@@ -522,8 +550,8 @@ export default function GroupDetailsPage() {
                       Leave Group
                     </button>
                   )}
-                  {!canInvite && (
-                    <p className="md-menu-note">
+                  {!canInvite && group && !group.isArchived && (
+                    <p className="md-menu-note" id="md-invite-note">
                       Only the owner or an admin can invite people.
                     </p>
                   )}
@@ -552,6 +580,15 @@ export default function GroupDetailsPage() {
           <LeaveGroupDialog
             groupId={group.groupId}
             groupName={group.name}
+            balances={(myBalance?.counterparties ?? []).map((item) => ({
+              userId: item.userId,
+              name: memberName(item.userId),
+              amount: item.cents / 100,
+            }))}
+            onSettle={() => {
+              setLeaveOpen(false);
+              setSettleWith("");
+            }}
             onClose={() => setLeaveOpen(false)}
             onLeft={() => router.replace("/groups")}
           />
@@ -645,7 +682,8 @@ export default function GroupDetailsPage() {
                       type="button"
                       className="md-action-secondary"
                       onClick={() => setSettleWith("")}
-                      disabled={myNet === null}
+                      disabled={myNet === null || myDebts.length === 0}
+                      title={myDebts.length === 0 ? "You don't owe anyone in this group" : undefined}
                     >
                       <span aria-hidden="true">⇄</span> Settle Debts
                     </button>
@@ -803,7 +841,10 @@ export default function GroupDetailsPage() {
                         key={category}
                         type="button"
                         className={activeCategory === category ? "active" : ""}
-                        onClick={() => setActiveCategory(category)}
+                        onClick={() => {
+                          setActiveCategory(category);
+                          setExpensePage(1);
+                        }}
                       >
                         {category !== "All" && (
                           <span aria-hidden="true">{categoryIcon(category, 16)}</span>
@@ -821,7 +862,9 @@ export default function GroupDetailsPage() {
                         No expenses found in this category.
                       </p>
                     ) : (
-                      filteredExpenses.map((expense) => (
+                      filteredExpenses
+                        .slice((expensePageNow - 1) * EXPENSES_PER_PAGE, expensePageNow * EXPENSES_PER_PAGE)
+                        .map((expense) => (
                         <article
                           key={expense.expenseId}
                           className="md-transaction-card md-transaction-clickable"
@@ -878,6 +921,13 @@ export default function GroupDetailsPage() {
                       ))
                     )}
                   </div>
+                  <Pagination
+                    page={expensePageNow}
+                    total={filteredExpenses.length}
+                    pageSize={EXPENSES_PER_PAGE}
+                    onChange={setExpensePage}
+                    noun="expenses"
+                  />
                   </>
                   )}
                 </section>

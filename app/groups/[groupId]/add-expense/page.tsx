@@ -20,6 +20,7 @@ import {
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
 import CategoryIcon from "@/components/CategoryIcon";
+import { notifyDataChanged } from "@/lib/manemi/events";
 import Icon from "@/components/Icon";
 import type { CategoryKey } from "@/lib/manemi/format";
 
@@ -103,7 +104,10 @@ export default function AddExpensePage() {
     async function load() {
       const supabase = createClient();
 
-      const { data: auth, error: authError } = await supabase.auth.getUser();
+      // Local session read (no auth round trip); the queries below are still
+      // checked by the database with this session's token.
+      const { data: sessionData, error: authError } = await supabase.auth.getSession();
+      const auth = { user: sessionData.session?.user ?? null };
 
       if (!alive) return;
 
@@ -408,6 +412,7 @@ export default function AddExpensePage() {
         destination.set("expenseAdded", createdExpenseId);
       }
 
+      notifyDataChanged(); // Home/Groups/History must not show cached totals
       router.replace(
         `/groups/${group.groupId}${destination.size ? `?${destination.toString()}` : ""}`,
       );

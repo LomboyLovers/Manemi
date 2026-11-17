@@ -1,5 +1,6 @@
 "use client";
 
+import { notifyDataChanged } from "@/lib/manemi/events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -75,6 +76,7 @@ export default function NotificationsBell({ onChange }: Props) {
     try {
       await respondFriendRequest(createClient(), row.friendshipId, accept);
       setRequests((list) => list.filter((item) => item.friendshipId !== row.friendshipId));
+      notifyDataChanged();
       onChange?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Couldn't update the request.");
@@ -92,6 +94,7 @@ export default function NotificationsBell({ onChange }: Props) {
         setOpen(false);
         router.push(`/groups/${invite.groupId}`);
       }
+      notifyDataChanged();
       onChange?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Couldn't update the invitation.");

@@ -113,3 +113,19 @@
   font-size: 18px;
   cursor: pointer;
 }
+
+/* Invite Friends shown to members, but unavailable */
+.manemi-actions-list button.manemi-action-disabled {
+  color: var(--mn-tertiary, #6c6c76);
+  cursor: not-allowed;
+}
+.manemi-actions-list button.manemi-action-disabled .manemi-action-chevron {
+  visibility: hidden;
+}
+.manemi-action-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+  font-weight: 400;
+}

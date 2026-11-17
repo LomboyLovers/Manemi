@@ -9,12 +9,19 @@ import AppNav from "@/components/AppNav";
 import Icon from "@/components/Icon";
 import { useDataVersion } from "@/lib/manemi/events";
 import {
-  loadGroupsData,
+  loadGroupsDataCached,
   totalsFor,
   type CurrentUser,
   type GroupSummary,
 } from "@/lib/manemi/groups";
 import { greeting, isZero, peso } from "@/lib/manemi/format";
+import CategoryIcon from "@/components/CategoryIcon";
+import { searchGroupIds, searchHistory } from "@/lib/manemi/search";
+import { useDebounced } from "@/lib/manemi/useDebounced";
+import type { HistoryExpense } from "@/lib/manemi/groups";
+
+/** Home shows this many recent groups; "See all" opens the Groups page. */
+const RECENT_LIMIT = 6;
 
 export default function Dashboard() {
   const [groups, setGroups] = useState<GroupSummary[]>([]);
@@ -22,11 +29,54 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
+  const query = useDebounced(search.trim(), 300);
+  const [matchIds, setMatchIds] = useState<Set<string> | null>(null);
+  const [matchExpenses, setMatchExpenses] = useState<HistoryExpense[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const dataVersion = useDataVersion();
+
+  // Search runs in the database, 300ms after typing stops.
+  useEffect(() => {
+    if (!query || !user) {
+      setMatchIds(null);
+      setMatchExpenses([]);
+      setSearchError("");
+      return;
+    }
+    let active = true;
+    setSearching(true);
+    const supabase = createClient();
+    Promise.all([
+      searchGroupIds(supabase, query),
+      searchHistory(
+        supabase,
+        user.id,
+        { kind: "expenses", groupId: "all", query, onlyMine: false, sort: "newest" },
+        1,
+        5,
+      ),
+    ])
+      .then(([ids, expenses]) => {
+        if (!active) return;
+        setMatchIds(ids);
+        setMatchExpenses(expenses.items);
+        setSearchError("");
+      })
+      .catch((reason: unknown) => {
+        if (active) setSearchError(reason instanceof Error ? reason.message : "Search failed. Try again.");
+      })
+      .finally(() => {
+        if (active) setSearching(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [query, user, dataVersion]);
 
   useEffect(() => {
     let active = true;
-    loadGroupsData(createClient())
+    loadGroupsDataCached(createClient())
       .then((result) => {
         if (!active || !result) return;
         setUser(result.user);
@@ -54,12 +104,9 @@ export default function Dashboard() {
   }, [dataVersion]);
 
   const filteredGroups = useMemo(() => {
-    const query = search.trim().toLowerCase();
     const recent = groups.filter((group) => !group.isArchived);
-    return query
-      ? recent.filter((group) => group.name.toLowerCase().includes(query))
-      : recent;
-  }, [groups, search]);
+    return matchIds ? recent.filter((group) => matchIds.has(group.id)) : recent.slice(0, RECENT_LIMIT);
+  }, [groups, matchIds]);
   const totals = useMemo(() => totalsFor(groups), [groups]);
 
   return (
@@ -102,6 +149,12 @@ export default function Dashboard() {
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
+
+        {searchError && (
+          <p className="dashboard-empty" role="alert">
+            {searchError}
+          </p>
+        )}
 
         {loadError && (
           <p className="dashboard-empty" role="alert">
@@ -179,7 +232,7 @@ export default function Dashboard() {
               id="groups"
             >
               <div className="dashboard-section-header">
-                <h2>Recent groups</h2>
+                <h2>{matchIds ? "Matching groups" : "Recent groups"}</h2>
                 <Link className="dashboard-see-all" href="/groups">
                   See all
                 </Link>
@@ -244,7 +297,38 @@ export default function Dashboard() {
               )}
             </section>
 
-            {/* Activity is intentionally hidden until real group activity is available. */}
+            {matchIds && (
+              <section className="dashboard-section mn-home-matches" aria-labelledby="home-match-expenses" aria-busy={searching}>
+                <div className="dashboard-section-header">
+                  <h2 id="home-match-expenses">Matching expenses</h2>
+                  <Link className="dashboard-see-all" href="/history">
+                    Open History
+                  </Link>
+                </div>
+                {matchExpenses.length ? (
+                  <ul className="mn-home-match-list">
+                    {matchExpenses.map((item) => (
+                      <li key={item.id}>
+                        <Link href={`/groups/${item.groupId}?expense=${encodeURIComponent(item.id)}`}>
+                          <span className="mn-home-match-icon" aria-hidden="true">
+                            <CategoryIcon name={item.category} size={20} />
+                          </span>
+                          <span className="mn-home-match-text">
+                            <strong>{item.title}</strong>
+                            <small>
+                              {item.groupName} · Paid by {item.payerName === "You" ? "you" : item.payerName}
+                            </small>
+                          </span>
+                          <strong className="mn-home-match-amount">{peso(item.amount)}</strong>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="dashboard-empty">No matching expenses.</p>
+                )}
+              </section>
+            )}
           </>
         )}
         </>

@@ -524,3 +524,67 @@
   padding: 4px 20px 20px;
   overflow-y: auto;
 }
+
+/* Leave group: who owes whom */
+.mn-leave-list {
+  margin: -4px 0 20px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 14px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.mn-leave-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 14px;
+}
+.mn-leave-list li + li {
+  border-top: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-leave-avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mn-input, #25252b);
+  font-size: 14px;
+  font-weight: 700;
+}
+.mn-leave-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mn-leave-list strong {
+  font-variant-numeric: tabular-nums;
+}
+.mn-leave-list.is-positive strong {
+  color: var(--mn-positive, #3ddc84);
+}
+.mn-leave-list.is-negative strong {
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-confirm-primary {
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-confirm-primary:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
