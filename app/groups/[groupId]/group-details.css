@@ -1540,3 +1540,30 @@
     background: var(--mn-surface-3, #2f2f36);
   }
 }
+
+/* Category icons (SVG) in filter chips */
+.md-categories button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.md-categories button > span {
+  display: inline-grid;
+}
+.md-categories button.active svg {
+  stroke: #fff;
+}
+
+/* SVG icons instead of emoji */
+.md-group-icon {
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.md-delete-icon {
+  display: grid;
+  place-items: center;
+  color: var(--mn-negative, #ff6b6b);
+}
+.md-notice-check {
+  display: grid;
+  place-items: center;
+}

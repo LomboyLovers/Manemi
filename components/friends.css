@@ -347,3 +347,9 @@ label.mn-friend-row {
   font-weight: 600;
   text-decoration: none;
 }
+
+.mn-friends-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

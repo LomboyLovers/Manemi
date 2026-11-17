@@ -18,6 +18,10 @@ import {
 } from "@/lib/manemi/split";
 
 import DatePicker from "@/components/DatePicker";
+import Select from "@/components/Select";
+import CategoryIcon from "@/components/CategoryIcon";
+import Icon from "@/components/Icon";
+import type { CategoryKey } from "@/lib/manemi/format";
 
 import "./add-expense.css";
 
@@ -35,20 +39,14 @@ type Category =
   | "Entertainment"
   | "Other";
 
-const categories: { name: Category; icon: string }[] = [
-  { name: "Food", icon: "🍔" },
-
-  { name: "Transport", icon: "🚕" },
-
-  { name: "Lodging", icon: "🏨" },
-
-  { name: "Shopping", icon: "🛍️" },
-
-  { name: "Utilities", icon: "💡" },
-
-  { name: "Entertainment", icon: "🎬" },
-
-  { name: "Other", icon: "📦" },
+const categories: { name: Category; key: CategoryKey }[] = [
+  { name: "Food", key: "food" },
+  { name: "Transport", key: "transport" },
+  { name: "Lodging", key: "lodging" },
+  { name: "Shopping", key: "shopping" },
+  { name: "Utilities", key: "utilities" },
+  { name: "Entertainment", key: "entertainment" },
+  { name: "Other", key: "other" },
 ];
 
 const money = (cents: number) =>
@@ -498,24 +496,31 @@ export default function AddExpensePage() {
                 <div className="ae-info-row">
                   <span>Group</span>
 
-                  <strong>📦 {group.name}</strong>
+                  <strong className="ae-group-name"><Icon name="users" size={18} /> {group.name}</strong>
                 </div>
 
-                <label className="ae-info-row" htmlFor="ae-payer">
-                  <span>Paid by</span>
+                <div className="ae-info-row">
+                  <span id="ae-payer-label">Paid by</span>
 
-                  <select
+                  <Select
                     id="ae-payer"
+                    label="Paid by"
                     value={payerId}
-                    onChange={(e) => setPayerId(e.target.value)}
-                  >
-                    {members.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.id === userId ? "You" : member.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onChange={setPayerId}
+                    options={members.map((member) => {
+                      const name = member.id === userId ? "You" : member.name;
+                      return {
+                        value: member.id,
+                        label: name,
+                        icon: (
+                          <span className="ae-payer-avatar" aria-hidden="true">
+                            {(member.name || "?").charAt(0).toUpperCase()}
+                          </span>
+                        ),
+                      };
+                    })}
+                  />
+                </div>
 
                 <div className="ae-info-row">
                   <span>Date</span>
@@ -537,8 +542,10 @@ export default function AddExpensePage() {
                     type="button"
                     className={category === item.name ? "active" : ""}
                     onClick={() => setCategory(item.name)}
+                    aria-pressed={category === item.name}
                   >
-                    {item.icon} {item.name}
+                    <CategoryIcon name={item.key} size={18} />
+                    {item.name}
                   </button>
                 ))}
               </div>
@@ -593,7 +600,7 @@ export default function AddExpensePage() {
                           onClick={() => toggleMember(member.id)}
                           aria-label={`${included ? "Exclude" : "Include"} ${member.name}`}
                         >
-                          {included ? "✓" : ""}
+                          {included && <Icon name="check" size={16} strokeWidth={3} />}
                         </button>
                       )}
 
@@ -666,13 +673,14 @@ export default function AddExpensePage() {
                   role="status"
                 >
                   <strong>
+                    <Icon name={validSplit ? "check" : "alert"} size={16} strokeWidth={2.4} />{" "}
                     {validSplit
-                      ? "✓ Split adds up correctly."
+                      ? "Split adds up correctly."
                       : difference < 0
-                        ? `⚠ ${mode === "percent" ? `${Math.abs(difference).toFixed(2).replace(/\.0+$/, "")}% still unassigned.` : `${money(-difference)} still unassigned.`}`
+                        ? `${mode === "percent" ? `${Math.abs(difference).toFixed(2).replace(/\.0+$/, "")}% still unassigned.` : `${money(-difference)} still unassigned.`}`
                         : difference > 0
-                          ? `⚠ ${mode === "percent" ? `${difference.toFixed(2).replace(/\.0+$/, "")}% over the total.` : `${money(difference)} over the expense total.`}`
-                          : "⚠ Check the split amounts."}
+                          ? `${mode === "percent" ? `${difference.toFixed(2).replace(/\.0+$/, "")}% over the total.` : `${money(difference)} over the expense total.`}`
+                          : "Check the split amounts."}
                   </strong>
 
                   <span>

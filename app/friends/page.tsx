@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppNav from "@/components/AppNav";
+import Icon from "@/components/Icon";
 import PageHeader from "@/components/PageHeader";
 import { useModalFocus } from "@/components/useModalFocus";
 import type { CurrentUser } from "@/lib/manemi/groups";
@@ -181,7 +182,7 @@ export default function FriendsPage() {
               </div>
               {formError && (
                 <p id="friend-identifier-error" className="mn-friends-error" role="alert">
-                  <span aria-hidden="true">⚠</span> {formError}
+                  <Icon name="alert" size={16} /> {formError}
                 </p>
               )}
             </div>

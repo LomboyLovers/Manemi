@@ -14,6 +14,17 @@ import {
 } from "@/lib/manemi/groups";
 import { CATEGORY_META, peso } from "@/lib/manemi/format";
 import { ACTIVITY_META, loadActivity, type ActivityItem } from "@/lib/manemi/activity";
+import CategoryIcon, { type GlyphName } from "@/components/CategoryIcon";
+import Select from "@/components/Select";
+
+const ACTION_GLYPH: Record<ActivityItem["action"], GlyphName> = {
+  expense_created: "added",
+  expense_updated: "edited",
+  expense_deleted: "deleted",
+  settlement_recorded: "payment",
+  settlement_updated: "edited",
+  settlement_cancelled: "cancelled",
+};
 import { useDataVersion } from "@/lib/manemi/events";
 import "./history.css";
 
@@ -345,20 +356,18 @@ export default function HistoryPage() {
               {label}
             </button>
           ))}
-          <label className={`mn-chip mn-chip-select ${groupId !== "all" ? "is-selected" : ""}`}>
-            <span className="mn-visually-hidden">Group</span>
-            <select value={groupId} onChange={(event) => setGroupId(event.target.value)}>
-              <option value="all">All groups</option>
-              {groupOptions.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </label>
+          <Select
+            variant="chip"
+            align="start"
+            label="Group"
+            value={groupId}
+            active={groupId !== "all"}
+            onChange={setGroupId}
+            options={[
+              { value: "all", label: "All groups" },
+              ...groupOptions.map((group) => ({ value: group.id, label: group.name })),
+            ]}
+          />
         </div>
 
         {error && (
@@ -429,7 +438,7 @@ export default function HistoryPage() {
                     const body = (
                       <>
                         <span className="mn-history-icon" aria-hidden="true">
-                          {meta.icon}
+                          <CategoryIcon name={ACTION_GLYPH[item.action]} color={meta.color} size={24} />
                         </span>
                         <span className="mn-history-text">
                           <strong>{item.title}</strong>
@@ -522,7 +531,7 @@ export default function HistoryPage() {
                 {section.items.map((item) => {
                   const isPayment = item.kind === "payment";
                   const meta = isPayment
-                    ? { icon: "✅", label: "Payment", color: "#3DDC84" }
+                    ? { label: "Payment", color: "#3DDC84" }
                     : CATEGORY_META[item.category];
                   const who = involvement(item, userId);
                   return (
@@ -536,7 +545,11 @@ export default function HistoryPage() {
                         className="mn-history-row"
                       >
                         <span className="mn-history-icon" aria-hidden="true">
-                          {meta.icon}
+                          {isPayment ? (
+                            <CategoryIcon name="payment" color={meta.color} size={24} />
+                          ) : (
+                            <CategoryIcon name={item.category} size={24} />
+                          )}
                         </span>
                         <span className="mn-history-text">
                           <strong>{item.title}</strong>

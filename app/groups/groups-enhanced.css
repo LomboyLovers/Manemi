@@ -369,3 +369,12 @@
     padding-inline: 40px;
   }
 }
+
+/* Group tiles use an SVG icon instead of emoji */
+.manemi-rich-group-emoji,
+.manemi-actions-emoji,
+.manemi-invite-icon {
+  display: grid;
+  place-items: center;
+  color: var(--mn-accent-light, #c4a1ff);
+}

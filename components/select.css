@@ -1,0 +1,177 @@
+/* Themed select (button + listbox). Manemi tokens. */
+.mn-select {
+  position: relative;
+  min-width: 0;
+  font-family: var(--font-inter, Inter), Inter, Arial, Helvetica, sans-serif;
+}
+.mn-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--mn-text, #f5f5f7);
+  font: inherit;
+  cursor: pointer;
+}
+.mn-select-value {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mn-select-chevron {
+  flex: none;
+  color: var(--mn-tertiary, #8a8a95);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.mn-select-trigger[aria-expanded="true"] .mn-select-chevron {
+  transform: rotate(180deg);
+}
+.mn-select-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+/* plain: text + chevron, right-aligned inside a row */
+.mn-select-plain .mn-select-trigger {
+  padding: 0 4px 0 10px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* chip: pill filter */
+.mn-select-chip .mn-select-trigger {
+  min-height: 44px;
+  padding: 0 14px 0 18px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 999px;
+  background: var(--mn-surface, #1c1c21);
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 15px;
+  font-weight: 500;
+  max-width: 260px;
+}
+.mn-select-chip .mn-select-trigger.is-active {
+  border-color: transparent;
+  background: var(--mn-accent, #8b3dff);
+  color: #fff;
+  font-weight: 600;
+}
+.mn-select-chip .mn-select-trigger.is-active .mn-select-chevron {
+  color: #fff;
+}
+
+/* field: full-width input-like box */
+.mn-select-field .mn-select-trigger {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px 0 16px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 14px;
+  background: var(--mn-input, #25252b);
+  font-size: 16px;
+  text-align: left;
+}
+.mn-select-field .mn-select-value {
+  flex: 1;
+}
+.mn-select-field .mn-select-trigger[aria-expanded="true"] {
+  border-color: var(--mn-accent, #8b3dff);
+}
+
+/* menu */
+.mn-select-menu {
+  position: fixed;
+  z-index: 130;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow-y: auto;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 16px;
+  background: var(--mn-surface, #1c1c21);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  color: var(--mn-text, #f5f5f7);
+  outline: 0;
+  transform-origin: top center;
+  animation: mn-pop-in 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.mn-select-menu li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.mn-select-menu li.is-cursor {
+  background: var(--mn-input, #25252b);
+}
+.mn-select-menu li.is-selected {
+  color: var(--mn-accent-light, #c4a1ff);
+  font-weight: 600;
+}
+.mn-select-option-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.mn-select-option-text > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mn-select-option-text small {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+  font-weight: 400;
+}
+.mn-select-menu:focus-visible li.is-cursor {
+  box-shadow: inset 0 0 0 2px var(--mn-accent-light, #c4a1ff);
+}
+.mn-select-trigger:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .mn-select-plain .mn-select-trigger:hover,
+  .mn-select-chip .mn-select-trigger:not(.is-active):hover {
+    background: var(--mn-input, #25252b);
+  }
+}
+
+/* Shared "ease in" for small popups: fade + slight grow/drop. */
+@keyframes mn-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mn-select-menu {
+    animation: mn-fade-in 120ms linear;
+  }
+  .mn-select-chevron {
+    transition: none;
+  }
+}
+@keyframes mn-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

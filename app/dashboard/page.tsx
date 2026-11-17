@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import HomeSkeleton from "@/components/HomeSkeleton";
 import PageHeader from "@/components/PageHeader";
 import AppNav from "@/components/AppNav";
+import Icon from "@/components/Icon";
 import { useDataVersion } from "@/lib/manemi/events";
 import {
   loadGroupsData,
@@ -204,7 +205,7 @@ export default function Dashboard() {
                             className="dashboard-group-emoji"
                             aria-hidden="true"
                           >
-                            📦
+                            <Icon name="users" size={22} />
                           </span>
                         </div>
                         <h3>{group.name}</h3>

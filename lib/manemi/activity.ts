@@ -47,13 +47,13 @@ type Row = {
 
 const METHOD: Record<string, string> = { cash: "Cash", gcash: "GCash", bank_transfer: "Bank transfer" };
 
-export const ACTIVITY_META: Record<ActivityAction, { icon: string; label: string; color: string }> = {
-  expense_created: { icon: "➕", label: "Added", color: "#C4A1FF" },
-  expense_updated: { icon: "✏️", label: "Edited", color: "#FFB547" },
-  expense_deleted: { icon: "🗑️", label: "Deleted", color: "#FF6B6B" },
-  settlement_recorded: { icon: "✅", label: "Payment", color: "#3DDC84" },
-  settlement_updated: { icon: "✏️", label: "Payment edited", color: "#FFB547" },
-  settlement_cancelled: { icon: "↩️", label: "Payment cancelled", color: "#FF6B6B" },
+export const ACTIVITY_META: Record<ActivityAction, { label: string; color: string }> = {
+  expense_created: { label: "Added", color: "#C4A1FF" },
+  expense_updated: { label: "Edited", color: "#FFB547" },
+  expense_deleted: { label: "Deleted", color: "#FF6B6B" },
+  settlement_recorded: { label: "Payment", color: "#3DDC84" },
+  settlement_updated: { label: "Payment edited", color: "#FFB547" },
+  settlement_cancelled: { label: "Payment cancelled", color: "#FF6B6B" },
 };
 
 const num = (value: unknown) => {

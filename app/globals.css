@@ -3312,3 +3312,44 @@ button:disabled {
     margin-top: 40px;
   }
 }
+
+/* New Group: themed selects */
+.new-group-emoji-select-wrap .mn-select-trigger {
+  height: 58px;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 6px;
+  font-size: 26px;
+}
+.new-group-emoji-select-wrap .mn-select-value {
+  flex: none;
+}
+.new-group-currency-field .mn-select {
+  margin-left: auto;
+}
+.new-group-currency-field .mn-select-trigger {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Icons replace emoji: tint the icon tiles. */
+.new-group-emoji-select-wrap .mn-select-trigger {
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.new-group-emoji-select-wrap .mn-select-trigger .mn-select-value {
+  display: none; /* the icon is the value; the list shows names */
+}
+.new-group-emoji-select-wrap .mn-select-icon,
+.new-group-emoji-select-wrap .mn-select-menu .mn-select-icon {
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.new-group-category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.manemi-dashboard-v2 .dashboard-group-emoji {
+  display: grid;
+  place-items: center;
+  color: var(--mn-accent-light, #c4a1ff);
+}

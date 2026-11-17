@@ -394,3 +394,47 @@
     overflow: visible;
   }
 }
+
+/* Category chips: icon + label */
+.ae-categories button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font: inherit;
+  font-size: 15px;
+}
+
+/* Paid by: themed select instead of the browser's box */
+.ae-info-row .mn-select {
+  max-width: 65%;
+}
+.ae-payer-avatar {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ae-group-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ae-group-name svg {
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.ae-check {
+  display: grid;
+  place-items: center;
+}
+.ae-validation strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

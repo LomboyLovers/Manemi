@@ -14,6 +14,8 @@ import GroupsSkeleton from "@/components/GroupSkeleton";
 import PageHeader, { HeaderButton } from "@/components/PageHeader";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog from "@/components/LeaveGroupDialog";
+import Select from "@/components/Select";
+import Icon, { type IconName } from "@/components/Icon";
 import AppNav from "@/components/AppNav";
 import { useDataVersion } from "@/lib/manemi/events";
 import {
@@ -39,7 +41,7 @@ type CustomIconProps = {
   className?: string;
 };
 
-type GroupData = GroupSummary & { emoji: string };
+type GroupData = GroupSummary & { icon: IconName };
 
 /** Direction of a personal balance, per the design system rules. */
 function balanceTone(net: number) {
@@ -73,7 +75,7 @@ export default function GroupsPage() {
   const [groupName, setGroupName] = useState("");
   const [groupCategory, setGroupCategory] = useState("Travel");
   const [groups, setGroups] = useState<GroupData[]>([]);
-  const [groupEmoji, setGroupEmoji] = useState("🇯🇵");
+  const [groupEmoji, setGroupEmoji] = useState<string>("plane");
   const [groupCurrency, setGroupCurrency] = useState("PHP");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createGroupError, setCreateGroupError] = useState("");
@@ -108,11 +110,11 @@ export default function GroupsPage() {
   const archiveGroup = groups.find((group) => group.id === archiveGroupId);
 
   const categories = [
-    { name: "Travel", emoji: "✈️" },
-    { name: "Roommates", emoji: "🏠" },
-    { name: "Group Dinners", emoji: "🍽️" },
-    { name: "Events", emoji: "🎉" },
-    { name: "Other", emoji: "📦" },
+    { name: "Travel", icon: "plane" as IconName },
+    { name: "Roommates", icon: "home" as IconName },
+    { name: "Group Dinners", icon: "utensils" as IconName },
+    { name: "Events", icon: "party" as IconName },
+    { name: "Other", icon: "box" as IconName },
   ];
 
   const router = useRouter();
@@ -288,7 +290,7 @@ export default function GroupsPage() {
       setShowCreateModal(false);
       setGroupName("");
       setGroupCategory("Travel");
-      setGroupEmoji("🇯🇵");
+      setGroupEmoji("plane");
       setGroupCurrency("PHP");
 
       setRefreshGroups((previous) => previous + 1);
@@ -327,7 +329,7 @@ export default function GroupsPage() {
         if (!active) return;
         if (result) {
           setUser(result.user);
-          setGroups(result.groups.map((group) => ({ ...group, emoji: "📦" })));
+          setGroups(result.groups.map((group) => ({ ...group, icon: "users" as IconName })));
           setGroupsError(
             result.warnings.length
               ? `Some details could not be loaded: ${result.warnings.join("; ")}`
@@ -622,7 +624,7 @@ export default function GroupsPage() {
                               className="manemi-rich-group-emoji"
                               aria-hidden="true"
                             >
-                              {group.emoji}
+                              <Icon name={group.icon} size={22} />
                             </span>
                             <div className="manemi-rich-card-menu-wrap">
                               <button
@@ -769,7 +771,7 @@ export default function GroupsPage() {
             <div className="manemi-actions-handle" aria-hidden="true" />
             <header className="manemi-actions-heading">
               <span className="manemi-actions-emoji" aria-hidden="true">
-                {selectedGroup.emoji}
+                <Icon name={selectedGroup.icon} size={24} />
               </span>
               <div>
                 <h2 id="manemi-actions-title">{selectedGroup.name}</h2>
@@ -908,7 +910,7 @@ export default function GroupsPage() {
               <div className="manemi-actions-handle" aria-hidden="true" />
               <header className="manemi-actions-heading">
                 <span className="manemi-actions-emoji" aria-hidden="true">
-                  {archiveGroup.emoji}
+                  <Icon name={archiveGroup.icon} size={24} />
                 </span>
                 <div>
                   <h2 id="manemi-archive-title">Archive Group?</h2>
@@ -979,7 +981,7 @@ export default function GroupsPage() {
               <span />
             </header>
             <div className="manemi-invite-hero">
-              <div className="manemi-invite-icon">♧</div>
+              <div className="manemi-invite-icon"><Icon name="users" size={30} /></div>
               <h3>Join a group</h3>
               <p>
                 Paste the invite link or code a group admin shared with you. You
@@ -1056,7 +1058,7 @@ export default function GroupsPage() {
           >
             <div className="manemi-invite-handle" />
             <div className="manemi-invite-hero">
-              <div className="manemi-invite-icon">✓</div>
+              <div className="manemi-invite-icon"><Icon name="check" size={30} strokeWidth={2.4} /></div>
               <h2 id="group-ready-title">{createdGroup.name} is ready</h2>
               <p>
                 Invite friends to start splitting expenses. Only people on your
@@ -1123,20 +1125,25 @@ export default function GroupsPage() {
               <div className="new-group-name-row">
                 <div className="new-group-icon-field">
                   <label htmlFor="new-group-icon">Icon</label>
-                  <select
-                    id="new-group-icon"
-                    className="new-group-emoji-select"
-                    value={groupEmoji}
-                    onChange={(event) => setGroupEmoji(event.target.value)}
-                  >
-                    <option value="🇯🇵">🇯🇵</option>
-                    <option value="🇰🇷">🇰🇷</option>
-                    <option value="🏠">🏠</option>
-                    <option value="✈️">✈️</option>
-                    <option value="🎉">🎉</option>
-                    <option value="🍽️">🍽️</option>
-                    <option value="📦">📦</option>
-                  </select>
+                  <div className="new-group-emoji-select-wrap">
+                    <Select
+                      id="new-group-icon"
+                      variant="field"
+                      align="start"
+                      label="Group icon"
+                      value={groupEmoji}
+                      onChange={setGroupEmoji}
+                      options={[
+                        { value: "plane", label: "Travel", icon: <Icon name="plane" size={22} /> },
+                        { value: "home", label: "Home", icon: <Icon name="home" size={22} /> },
+                        { value: "utensils", label: "Food", icon: <Icon name="utensils" size={22} /> },
+                        { value: "party", label: "Party", icon: <Icon name="party" size={22} /> },
+                        { value: "flag", label: "Trip", icon: <Icon name="flag" size={22} /> },
+                        { value: "users", label: "Friends", icon: <Icon name="users" size={22} /> },
+                        { value: "box", label: "Other", icon: <Icon name="box" size={22} /> },
+                      ]}
+                    />
+                  </div>
                 </div>
                 <div className="new-group-name-field">
                   <label htmlFor="new-group-name">Group name</label>
@@ -1163,7 +1170,7 @@ export default function GroupsPage() {
                       onClick={() => setGroupCategory(category.name)}
                       aria-pressed={groupCategory === category.name}
                     >
-                      <span>{category.emoji}</span> {category.name}
+                      <Icon name={category.icon} size={18} /> {category.name}
                     </button>
                   ))}
                 </div>
@@ -1171,17 +1178,19 @@ export default function GroupsPage() {
 
               <div className="new-group-currency-field">
                 <label htmlFor="new-group-currency">Currency</label>
-                <select
+                <Select
                   id="new-group-currency"
+                  label="Currency"
                   value={groupCurrency}
-                  onChange={(event) => setGroupCurrency(event.target.value)}
-                >
-                  <option value="PHP">Philippine Peso (₱)</option>
-                  <option value="USD">US Dollar ($)</option>
-                  <option value="EUR">Euro (€)</option>
-                  <option value="JPY">Japanese Yen (¥)</option>
-                  <option value="KRW">Korean Won (₩)</option>
-                </select>
+                  onChange={setGroupCurrency}
+                  options={[
+                    { value: "PHP", label: "Philippine Peso (₱)" },
+                    { value: "USD", label: "US Dollar ($)" },
+                    { value: "EUR", label: "Euro (€)" },
+                    { value: "JPY", label: "Japanese Yen (¥)" },
+                    { value: "KRW", label: "Korean Won (₩)" },
+                  ]}
+                />
               </div>
               <p className="new-group-info">
                 <span aria-hidden="true">ⓘ</span> You'll be the group admin.

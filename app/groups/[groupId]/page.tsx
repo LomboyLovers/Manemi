@@ -10,6 +10,8 @@ import AppNav from "@/components/AppNav";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog from "@/components/LeaveGroupDialog";
 import SettleUpSheet from "@/components/SettleUpSheet";
+import CategoryIcon from "@/components/CategoryIcon";
+import Icon from "@/components/Icon";
 import { useDataVersion } from "@/lib/manemi/events";
 import { CATEGORY_META, categoryKey, isZero, peso } from "@/lib/manemi/format";
 import { buildLedger, paymentEntry, sharesFromSplitRows } from "@/lib/manemi/ledger";
@@ -426,8 +428,9 @@ export default function GroupDetailsPage() {
       ? expenses
       : expenses.filter((expense) => expense.category === activeCategory);
 
-  const categoryIcon = (category: string | null) =>
-    CATEGORY_META[categoryKey(category)].icon;
+  const categoryIcon = (category: string | null, size = 22) => (
+    <CategoryIcon name={categoryKey(category)} size={size} />
+  );
 
   const memberCount = members.length;
 
@@ -583,7 +586,7 @@ export default function GroupDetailsPage() {
             <>
               <section className="md-group-heading">
                 <div className="md-group-icon" aria-hidden="true">
-                  📦
+                  <Icon name="users" size={28} />
                 </div>
 
                 <div>
@@ -818,7 +821,7 @@ export default function GroupDetailsPage() {
                         onClick={() => setActiveCategory(category)}
                       >
                         {category !== "All" && (
-                          <span aria-hidden="true">{categoryIcon(category)}</span>
+                          <span aria-hidden="true">{categoryIcon(category, 16)}</span>
                         )}
                         {category === "All"
                           ? "All"
@@ -922,7 +925,7 @@ export default function GroupDetailsPage() {
             {showDeleteConfirm ? (
               <div className="md-delete-content">
                 <div className="md-delete-icon" aria-hidden="true">
-                  🗑
+                  <Icon name="trash" size={30} />
                 </div>
                 <h2 className="md-delete-title">
                   Delete &quot;{selectedExpense.title}&quot;?
@@ -973,7 +976,7 @@ export default function GroupDetailsPage() {
 
                 <div className="md-sheet-expense-heading">
                   <div className="md-sheet-category-icon">
-                    {categoryIcon(selectedExpense.category)}
+                    {categoryIcon(selectedExpense.category, 28)}
                   </div>
                   <div>
                     <h2>{selectedExpense.title}</h2>
@@ -1028,7 +1031,7 @@ export default function GroupDetailsPage() {
       {addedExpense && (
         <div className="md-expense-notice" role="status">
           <span className="md-notice-check" aria-hidden="true">
-            ✓
+            <Icon name="check" size={18} strokeWidth={2.6} />
           </span>
           <div className="md-notice-body">
             <strong>Expense added</strong>
@@ -1060,7 +1063,7 @@ export default function GroupDetailsPage() {
       {!addedExpense && expenseNotice && (
         <div className="md-expense-notice" role="status">
           <span className="md-notice-check" aria-hidden="true">
-            ✓
+            <Icon name="check" size={18} strokeWidth={2.6} />
           </span>
           <div className="md-notice-body">
             <strong>{expenseNotice}</strong>

@@ -504,3 +504,93 @@
   cursor: default;
   padding-right: 36px; /* lines up with rows that have a chevron */
 }
+
+/* Sort & filter popover eases in from the button (opacity + transform only). */
+.mn-history-popover {
+  transform-origin: top right;
+  animation: mn-history-pop 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes mn-history-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Themed radio + checkbox in the popover */
+.mn-radio input,
+.mn-check input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid #55555c;
+  background: var(--mn-input, #25252b);
+  cursor: pointer;
+}
+.mn-radio input {
+  border-radius: 50%;
+}
+.mn-radio input::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+}
+.mn-radio input:checked {
+  border-color: transparent;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+}
+.mn-radio input:checked::after {
+  opacity: 1;
+}
+.mn-check input {
+  border-radius: 7px;
+}
+.mn-check input::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.3 4.8 9 10 3' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.mn-check input:checked {
+  border-color: transparent;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+}
+.mn-check input:checked::after {
+  opacity: 1;
+}
+.mn-radio input:focus-visible,
+.mn-check input:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+.mn-history-icon svg {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-history-popover {
+    animation: mn-history-fade 120ms linear;
+  }
+}
+@keyframes mn-history-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

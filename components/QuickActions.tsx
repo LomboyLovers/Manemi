@@ -191,7 +191,7 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
               {activeGroups.map((group) => (
                 <QuickRow
                   key={group.id}
-                  emoji="📦"
+                  icon={Icon.group}
                   title={group.name}
                   detail={`${group.members} ${group.members === 1 ? "member" : "members"}`}
                   onClick={() => router.push(`/groups/${group.id}/add-expense`)}
@@ -301,7 +301,6 @@ type RowProps = {
   title: string;
   detail?: string;
   icon?: React.ReactNode;
-  emoji?: string;
   initial?: string;
   amount?: string;
   action?: string;
@@ -311,7 +310,7 @@ type RowProps = {
   onClick?: () => void;
 };
 
-function QuickRow({ title, detail, icon, emoji, initial, amount, action, tone, chevron, disabled, onClick }: RowProps) {
+function QuickRow({ title, detail, icon, initial, amount, action, tone, chevron, disabled, onClick }: RowProps) {
   return (
     <button
       type="button"
@@ -320,7 +319,7 @@ function QuickRow({ title, detail, icon, emoji, initial, amount, action, tone, c
       aria-disabled={disabled || undefined}
     >
       <span className={`mn-quick-icon ${initial ? "is-initial" : ""}`} aria-hidden="true">
-        {icon ? <Svg>{icon}</Svg> : emoji ?? initial?.charAt(0).toUpperCase()}
+        {icon ? <Svg>{icon}</Svg> : initial?.charAt(0).toUpperCase()}
       </span>
       <span className="mn-quick-text">
         <strong>{title}</strong>
