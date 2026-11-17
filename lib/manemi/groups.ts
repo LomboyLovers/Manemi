@@ -76,7 +76,12 @@ type ExpenseRow = {
   expenseDate: string;
 };
 
-type SplitRow = Record<string, unknown> & { expenseId: string; userId: string };
+type SplitRow = {
+  expenseId: string;
+  userId: string;
+  amountOwed: number | string | null;
+  percentage: number | string | null;
+};
 
 const CHUNK = 150; // keep `in (...)` URLs short
 
@@ -169,8 +174,11 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     ),
     inChunks<SplitRow>(
       expenseRows.map((row) => row.expenseId),
-      // Whole rows: the share column name isn't known to the frontend.
-      (chunk) => supabase.from("Expense_Split").select("*").in("expenseId", chunk),
+      (chunk) =>
+        supabase
+          .from("Expense_Split")
+          .select("expenseId, userId, amountOwed, percentage")
+          .in("expenseId", chunk),
     ),
   ]);
   if (splitsResult.error) warnings.push(`Expense participants unavailable: ${splitsResult.error.message}`);

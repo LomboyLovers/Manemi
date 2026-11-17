@@ -17,9 +17,11 @@ type Group = {
 };
 
 type GroupMember = { userId: string; name: string };
-type ExpenseSplit = Record<string, unknown> & {
+type ExpenseSplit = {
   expenseId: string;
   userId: string;
+  amountOwed: number | string | null;
+  percentage: number | string | null;
 };
 
 type Expense = {
@@ -140,8 +142,7 @@ export default function GroupDetailsPage() {
         expenseIds.length
           ? supabase
               .from("Expense_Split")
-              // Whole rows: the share column name isn't known to the frontend.
-              .select("*")
+              .select("expenseId, userId, amountOwed, percentage")
               .in("expenseId", expenseIds)
           : Promise.resolve({ data: [], error: null }),
       ]);

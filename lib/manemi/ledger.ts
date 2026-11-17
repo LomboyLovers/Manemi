@@ -85,40 +85,30 @@ export function buildLedger(expenses: LedgerExpense[]) {
   return { forUser, memberNets };
 }
 
-type SplitRow = Record<string, unknown> & { userId: string };
+/** An Expense_Split row: amountOwed and percentage are numeric (may be null). */
+export type SplitRow = {
+  expenseId?: string;
+  userId: string;
+  amountOwed?: number | string | null;
+  percentage?: number | string | null;
+};
 
-// Column names a split row might use for the person's share. The schema is
-// not in the repo, so the loader reads whole rows and this picks the column.
-const AMOUNT_KEYS = [
-  "amountOwed",
-  "owedAmount",
-  "shareAmount",
-  "splitAmount",
-  "amountDue",
-  "amount",
-  "share",
-];
-const PERCENT_KEYS = ["percentage", "percent", "sharePercentage"];
-
-const numberIn = (row: SplitRow, keys: string[]) => {
-  for (const key of keys) {
-    if (row[key] === null || row[key] === undefined || row[key] === "") continue;
-    const value = Number(row[key]);
-    if (Number.isFinite(value)) return value;
-  }
-  return null;
+const numberOrNull = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 };
 
 /**
  * Each participant's share in cents, from an expense's Expense_Split rows.
- * Uses the stored amount if there is one, else the stored percentage, else
- * an equal split between the listed participants only.
+ * Uses amountOwed when every row has it, else percentage, else an equal
+ * split between the listed participants only.
  */
 export function sharesFromSplitRows(totalCents: number, rows: SplitRow[]): Share[] {
   const ids = [...new Set(rows.map((row) => row.userId))];
   if (!ids.length) return [];
 
-  const amounts = rows.map((row) => numberIn(row, AMOUNT_KEYS));
+  const amounts = rows.map((row) => numberOrNull(row.amountOwed));
   if (amounts.every((value) => value !== null)) {
     const cents = new Map<string, number>();
     rows.forEach((row, index) =>
@@ -127,7 +117,7 @@ export function sharesFromSplitRows(totalCents: number, rows: SplitRow[]): Share
     return ids.map((userId) => ({ userId, cents: cents.get(userId) ?? 0 }));
   }
 
-  const percents = rows.map((row) => numberIn(row, PERCENT_KEYS));
+  const percents = rows.map((row) => numberOrNull(row.percentage));
   const weights: Record<string, number> = {};
   if (percents.every((value) => value !== null)) {
     rows.forEach((row, index) => {
