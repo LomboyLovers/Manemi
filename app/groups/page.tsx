@@ -12,6 +12,7 @@ import "./groups-invitations.css";
 import "./groups-balance-card.css";
 import GroupsSkeleton from "@/components/GroupSkeleton";
 import PageHeader, { HeaderButton } from "@/components/PageHeader";
+import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import AppNav from "@/components/AppNav";
 import {
   loadGroupsData,
@@ -88,24 +89,15 @@ export default function GroupsPage() {
     name: string;
     code: string;
   } | null>(null);
-  const [inviteGroupId, setInviteGroupId] = useState<string | null>(null);
-  const [inviteEmails, setInviteEmails] = useState("");
-  const [inviteSending, setInviteSending] = useState(false);
-  const [inviteResults, setInviteResults] = useState<
-    Array<{ email: string; status: string }>
-  >([]);
-  const [inviteError, setInviteError] = useState("");
+  // Group whose Invite Friends sheet is open (owner/admin only).
+  const [inviteGroup, setInviteGroup] = useState<{
+    id: string;
+    name: string;
+    memberIds: string[];
+  } | null>(null);
   const [joinInput, setJoinInput] = useState("");
   const [joinError, setJoinError] = useState("");
   const [joining, setJoining] = useState(false);
-  const [shareGroup, setShareGroup] = useState<{
-    id: string;
-    name: string;
-    code: string;
-  } | null>(null);
-  const [shareError, setShareError] = useState("");
-  const [loadingShare, setLoadingShare] = useState(false);
-  const [copyMessage, setCopyMessage] = useState("");
 
   const selectedGroup = groups.find((group) => group.id === groupMenu);
   const archiveGroup = groups.find((group) => group.id === archiveGroupId);
@@ -135,74 +127,6 @@ export default function GroupsPage() {
       if (/^(https?:\/\/|www\.|\/)/i.test(value) || /[/?#\s]/.test(value))
         return "";
       return value;
-    }
-  }
-
-  function invitationLink(code: string): string {
-    if (typeof window === "undefined")
-      return `/join?code=${encodeURIComponent(code)}`;
-    return `${window.location.origin}/join?code=${encodeURIComponent(code)}`;
-  }
-
-  async function copyText(value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyMessage("Copied to clipboard");
-    } catch {
-      setCopyMessage("Copy failed. Please select and copy the link.");
-    }
-  }
-
-  async function shareInvite(code: string, name: string) {
-    const link = invitationLink(code);
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Join ${name} on Manemi`,
-          text: `You have been invited to ${name}. Sign in with your invited email.`,
-          url: link,
-        });
-      } catch (error) {
-        if ((error as Error)?.name !== "AbortError")
-          setCopyMessage("Unable to share. You can copy the link instead.");
-      }
-    } else {
-      await copyText(link);
-    }
-  }
-
-  async function openShareGroup(id: string, name: string) {
-    setGroupMenu(null);
-    setShareError("");
-    setCopyMessage("");
-    setLoadingShare(true);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("Group")
-        .select("groupId, name, inviteCode, inviteCodeExpiresAt, isArchived")
-        .eq("groupId", id)
-        .single();
-      if (error) throw error;
-      if (!data?.inviteCode)
-        throw new Error("No invitation code is available for this group.");
-      if (data.isArchived)
-        throw new Error("Archived groups cannot accept invitations.");
-      if (
-        data.inviteCodeExpiresAt &&
-        new Date(data.inviteCodeExpiresAt).getTime() < Date.now()
-      ) {
-        throw new Error("This group's invitation code has expired.");
-      }
-      setShareGroup({ id, name, code: data.inviteCode });
-    } catch (error) {
-      setShareError(
-        error instanceof Error
-          ? error.message
-          : "Unable to load the invitation link.",
-      );
-    } finally {
-      setLoadingShare(false);
     }
   }
 
@@ -241,60 +165,6 @@ export default function GroupsPage() {
       );
     } finally {
       setJoining(false);
-    }
-  }
-
-  async function handleInviteMembers(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!inviteGroupId || inviteSending) return;
-    const emails = [
-      ...new Set(
-        inviteEmails
-          .split(/[\s,;]+/)
-          .map((email) => email.trim().toLowerCase())
-          .filter(Boolean),
-      ),
-    ];
-    if (
-      !emails.length ||
-      emails.length > 10 ||
-      emails.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    ) {
-      setInviteError(
-        "Enter 1 to 10 valid email addresses, separated by commas.",
-      );
-      return;
-    }
-    setInviteSending(true);
-    setInviteError("");
-    setInviteResults([]);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase.functions.invoke(
-        "invite-members",
-        {
-          body: { groupId: inviteGroupId, emails },
-        },
-      );
-      if (error || data?.error) {
-        let message =
-          data?.error || error?.message || "Unable to send invitations.";
-        if (error && "context" in error && error.context instanceof Response) {
-          const response = await error.context.json().catch(() => null);
-          if (response?.error) message = response.error;
-          if (Array.isArray(response?.results))
-            setInviteResults(response.results);
-        }
-        throw new Error(message);
-      }
-      setInviteResults(Array.isArray(data?.results) ? data.results : []);
-      setInviteEmails("");
-    } catch (error) {
-      setInviteError(
-        error instanceof Error ? error.message : "Unable to send invitations.",
-      );
-    } finally {
-      setInviteSending(false);
     }
   }
 
@@ -381,7 +251,6 @@ export default function GroupsPage() {
         return;
       }
 
-      console.log("Group created:", data);
       // The Edge Function may return either { group: {...} } or the group directly.
       const resultGroup = data?.group ?? data;
       let newId: string | undefined = resultGroup?.groupId ?? resultGroup?.id;
@@ -419,8 +288,8 @@ export default function GroupsPage() {
 
       setRefreshGroups((previous) => previous + 1);
       if (!newId)
-        setShareError(
-          "Group created. Open its actions menu to invite members.",
+        setGroupsError(
+          "Group created. Open its ••• menu and choose Invite Friends.",
         );
     } catch (error) {
       console.error(error);
@@ -501,7 +370,10 @@ export default function GroupsPage() {
         {/* HEADER */}
         {loadingGroups || groups.length > 0 || Boolean(search) ? (
           <>
-            <PageHeader user={user}>
+            <PageHeader
+              user={user}
+              onNotificationsChange={() => setRefreshGroups((value) => value + 1)}
+            >
               <HeaderButton label="Join group" onClick={() => setShowJoinModal(true)}>
                 <CustomIcon name="group" size={22} />
               </HeaderButton>
@@ -898,41 +770,58 @@ export default function GroupsPage() {
               <div>
                 <h2 id="manemi-actions-title">{selectedGroup.name}</h2>
                 <p>
-                  {selectedGroup.isCreator ? "Group admin" : "Group member"}
+                  {selectedGroup.role === "owner"
+                    ? "Group owner"
+                    : selectedGroup.role === "admin"
+                      ? "Group admin"
+                      : "Group member"}
                 </p>
               </div>
               <span className="manemi-actions-admin">
-                {selectedGroup.isCreator ? "Admin" : "Member"}
+                {selectedGroup.role === "owner"
+                  ? "Owner"
+                  : selectedGroup.role === "admin"
+                    ? "Admin"
+                    : "Member"}
               </span>
             </header>
             <div className="manemi-actions-list">
-              {[
-                { label: "Share Invite Link", icon: "link" },
-                { label: "Manage Members", icon: "users" },
-              ].map((action) => (
+              {selectedGroup.canInvite && (
                 <button
-                  key={action.label}
                   type="button"
                   onClick={() => {
                     setGroupMenu(null);
-                    if (action.label === "Share Invite Link") {
-                      void openShareGroup(selectedGroup.id, selectedGroup.name);
-                    } else {
-                      setInviteGroupId(selectedGroup.id);
-                      setInviteResults([]);
-                      setInviteError("");
-                    }
+                    setInviteGroup({
+                      id: selectedGroup.id,
+                      name: selectedGroup.name,
+                      memberIds: selectedGroup.memberIds,
+                    });
                   }}
                 >
                   <span className="manemi-action-symbol" aria-hidden="true">
-                    {action.icon === "link" ? "🔗" : "♧"}
+                    ＋
                   </span>
-                  {action.label}
+                  Invite Friends
                   <span className="manemi-action-chevron" aria-hidden="true">
                     ›
                   </span>
                 </button>
-              ))}
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupMenu(null);
+                  router.push(`/groups/${selectedGroup.id}`);
+                }}
+              >
+                <span className="manemi-action-symbol" aria-hidden="true">
+                  ↗
+                </span>
+                Open Group
+                <span className="manemi-action-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </button>
             </div>
             <div className="manemi-actions-list manemi-actions-danger">
               {selectedGroup.isCreator ? (
@@ -1124,196 +1013,64 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* INVITE MEMBERS BY EMAIL */}
-      {inviteGroupId && (
-        <div
-          className="manemi-invite-overlay"
-          onClick={() => !inviteSending && setInviteGroupId(null)}
-        >
+      {/* INVITE FRIENDS (owner/admin) */}
+      {inviteGroup && (
+        <InviteFriendsSheet
+          groupId={inviteGroup.id}
+          groupName={inviteGroup.name}
+          memberIds={inviteGroup.memberIds}
+          onClose={() => setInviteGroup(null)}
+        />
+      )}
+
+      {/* GROUP CREATED: invite friends next */}
+      {createdGroup && (
+        <div className="manemi-invite-overlay" onClick={() => setCreatedGroup(null)}>
           <section
             className="manemi-invite-sheet"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="invite-members-title"
+            aria-labelledby="group-ready-title"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="manemi-invite-handle" />
-            <header className="manemi-invite-top">
-              <button
-                type="button"
-                disabled={inviteSending}
-                onClick={() => setInviteGroupId(null)}
-              >
-                Cancel
-              </button>
-              <h2 id="invite-members-title">Invite Members</h2>
-              <span />
-            </header>
             <div className="manemi-invite-hero">
-              <div className="manemi-invite-icon">✉</div>
-              <h3>Invite by email</h3>
+              <div className="manemi-invite-icon">✓</div>
+              <h2 id="group-ready-title">{createdGroup.name} is ready</h2>
               <p>
-                Only invited email addresses can join. Send invitations to up to
-                10 people at once.
+                Invite friends to start splitting expenses. Only people on your
+                friends list can be invited.
               </p>
             </div>
-            <form onSubmit={handleInviteMembers}>
-              <label htmlFor="manemi-invite-emails">Email addresses</label>
-              <textarea
-                id="manemi-invite-emails"
-                rows={3}
-                placeholder="friend@example.com, another@example.com"
-                value={inviteEmails}
-                onChange={(event) => setInviteEmails(event.target.value)}
-              />
-              {inviteError && (
-                <p className="manemi-invite-error" role="alert">
-                  {inviteError}
-                </p>
-              )}
-              {inviteResults.length > 0 && (
-                <div className="manemi-invite-results" aria-live="polite">
-                  {inviteResults.map((result) => (
-                    <p key={result.email}>
-                      {result.email}:{" "}
-                      {result.status === "sent"
-                        ? "Invitation sent"
-                        : result.status === "already_member"
-                          ? "Already a member"
-                          : "Sending failed"}
-                    </p>
-                  ))}
-                </div>
-              )}
-              <button
-                className="manemi-invite-primary"
-                type="submit"
-                disabled={!inviteEmails.trim() || inviteSending}
-              >
-                {inviteSending ? "Sending Invitations..." : "Send Invitations"}
-              </button>
-            </form>
-          </section>
-        </div>
-      )}
-
-      {/* GROUP CREATED AND SHARE INVITE LINK */}
-      {(createdGroup || shareGroup) &&
-        (() => {
-          const target = createdGroup || shareGroup!;
-          return (
-            <div
-              className="manemi-invite-overlay"
+            <button
+              type="button"
+              className="manemi-invite-primary"
               onClick={() => {
+                const target = createdGroup;
                 setCreatedGroup(null);
-                setShareGroup(null);
-                setCopyMessage("");
+                setInviteGroup({
+                  id: target.id,
+                  name: target.name,
+                  memberIds: user ? [user.id] : [],
+                });
               }}
             >
-              <section
-                className="manemi-invite-sheet"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="share-invite-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="manemi-invite-handle" />
-                <div className="manemi-invite-hero">
-                  <div className="manemi-invite-icon">✓</div>
-                  <h2 id="share-invite-title">
-                    {createdGroup
-                      ? `${target.name} is ready`
-                      : `Invite to ${target.name}`}
-                  </h2>
-                  <p>
-                    Invite friends by email first. Only invited email addresses
-                    can join using this link.
-                  </p>
-                </div>
-                {target.code && (
-                  <>
-                    <label>Group link</label>
-                    <div className="manemi-invite-link">
-                      <span>{invitationLink(target.code)}</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void copyText(invitationLink(target.code))
-                        }
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </>
-                )}
-                {copyMessage && (
-                  <p className="manemi-invite-feedback" role="status">
-                    {copyMessage}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="manemi-invite-primary"
-                  onClick={() => {
-                    setCreatedGroup(null);
-                    setShareGroup(null);
-                    setInviteGroupId(target.id);
-                    setInviteResults([]);
-                    setInviteError("");
-                  }}
-                >
-                  Invite Members by Email
-                </button>
-                {target.code && (
-                  <button
-                    type="button"
-                    className="manemi-invite-secondary"
-                    onClick={() => void shareInvite(target.code, target.name)}
-                  >
-                    Share Invite Link
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="manemi-invite-secondary"
-                  onClick={() => {
-                    setCreatedGroup(null);
-                    setShareGroup(null);
-                    router.push(`/groups/${target.id}`);
-                  }}
-                >
-                  Go to Group
-                </button>
-              </section>
-            </div>
-          );
-        })()}
-      {(loadingShare || shareError) && !shareGroup && (
-        <div
-          className="manemi-invite-overlay"
-          onClick={() => {
-            if (!loadingShare) setShareError("");
-          }}
-        >
-          <section
-            className="manemi-invite-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Invitation link"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <p>{loadingShare ? "Loading invitation link..." : shareError}</p>
+              Invite Friends
+            </button>
             <button
-              className="manemi-invite-secondary"
               type="button"
-              onClick={() => setShareError("")}
+              className="manemi-invite-secondary"
+              onClick={() => {
+                const target = createdGroup;
+                setCreatedGroup(null);
+                router.push(`/groups/${target.id}`);
+              }}
             >
-              Close
+              Go to Group
             </button>
           </section>
         </div>
       )}
-
 
       {/* CREATE GROUP BOTTOM SHEET */}
       {showCreateModal && (

@@ -7,13 +7,22 @@ import type { GroupSummary } from "@/lib/manemi/groups";
 import QuickActions from "./QuickActions";
 import "./app-nav.css";
 
-export type NavSection = "home" | "groups" | "history";
+export type NavSection = "home" | "groups" | "friends" | "history";
 
 const ITEMS: Array<{ id: NavSection; href: string; label: string; icon: string }> = [
   { id: "home", href: "/dashboard", label: "Home", icon: "home" },
   { id: "groups", href: "/groups", label: "Groups", icon: "group" },
+  { id: "friends", href: "/friends", label: "Friends", icon: "friends" },
   { id: "history", href: "/history", label: "History", icon: "clock" },
 ];
+
+/** No PNG exists for Friends: a person-with-plus icon in the same style. */
+const FriendsIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <circle cx="9" cy="8" r="4" />
+    <path d="M2 21c0-4 3.5-6 7-6s7 2 7 6M19 8v6M16 11h6" />
+  </svg>
+);
 
 type Props = {
   active?: NavSection;
@@ -46,7 +55,11 @@ export default function AppNav({ active, groups }: Props) {
               className={`mn-nav-link ${active === item.id ? "is-active" : ""}`}
               aria-current={active === item.id ? "page" : undefined}
             >
+              {item.icon === "friends" ? (
+              <FriendsIcon />
+            ) : (
               <Image src={`/icons/${item.icon}.png`} alt="" width={20} height={20} />
+            )}
               <span>{item.label}</span>
             </Link>
           ))}

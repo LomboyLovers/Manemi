@@ -12,7 +12,7 @@
 .mn-nav {
   position: fixed;
   z-index: 60;
-  font-family: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter, Inter), Inter, Arial, Helvetica, sans-serif;
 }
 
 .mn-nav-link,
@@ -197,4 +197,13 @@
 }
 .mn-nav-add.is-open > span[aria-hidden="true"] {
   font-size: 34px;
+}
+
+/* Inline SVG nav icon matches the PNG icons' look. */
+.mn-nav-link svg {
+  flex: none;
+  opacity: 0.8;
+}
+.mn-nav-link.is-active svg {
+  opacity: 1;
 }

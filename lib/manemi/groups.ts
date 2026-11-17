@@ -24,6 +24,12 @@ export type GroupSummary = {
   name: string;
   createdAt: string;
   isCreator: boolean;
+  /** Your role in the group. */
+  role: "owner" | "admin" | "member";
+  /** Owners and admins can invite friends. */
+  canInvite: boolean;
+  /** Everyone in the group (user ids). */
+  memberIds: string[];
   isArchived: boolean;
   status: "active" | "settled" | "unsettled";
   members: number;
@@ -164,7 +170,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       .select("groupId, name, createdAt, createdBy, isArchived")
       .in("groupId", groupIds)
       .order("createdAt", { ascending: false }),
-    supabase.from("Group_Member").select("groupId, userId").in("groupId", groupIds),
+    supabase.from("Group_Member").select("groupId, userId, role").in("groupId", groupIds),
     supabase
       .from("Expense")
       .select("expenseId, groupId, paidBy_UserId, title, totalAmount, category, expenseDate")
@@ -177,7 +183,11 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
   if (rosterResult.error) warnings.push(`Group members unavailable: ${rosterResult.error.message}`);
   if (expensesResult.error) warnings.push(`Expenses unavailable: ${expensesResult.error.message}`);
 
-  const rosterRows = (rosterResult.data ?? []) as Array<{ groupId: string; userId: string }>;
+  const rosterRows = (rosterResult.data ?? []) as Array<{
+    groupId: string;
+    userId: string;
+    role: "owner" | "admin" | "member";
+  }>;
   const expenseRows = (expensesResult.data ?? []) as ExpenseRow[];
   const peopleIds = [
     ...new Set([me.id, ...rosterRows.map((row) => row.userId), ...expenseRows.map((row) => row.paidBy_UserId)]),
@@ -212,6 +222,10 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     set.add(row.userId);
     membersByGroup.set(row.groupId, set);
   }
+  const myRole = (groupId: string, isCreator: boolean): GroupSummary["role"] =>
+    rosterRows.find((row) => row.groupId === groupId && row.userId === me.id)?.role ??
+    (isCreator ? "owner" : "member");
+
   const splitsByExpense = new Map<string, SplitRow[]>();
   for (const row of splitsResult.data) {
     const list = splitsByExpense.get(row.expenseId) ?? [];
@@ -296,6 +310,11 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
         name: group.name,
         createdAt: group.createdAt,
         isCreator: group.createdBy === me.id,
+        role: myRole(group.groupId, group.createdBy === me.id),
+        canInvite:
+          !group.isArchived &&
+          ["owner", "admin"].includes(myRole(group.groupId, group.createdBy === me.id)),
+        memberIds: [...(membersByGroup.get(group.groupId) ?? [])],
         isArchived: Boolean(group.isArchived),
         // An archived group is Settled only when every member's net is zero.
         status: group.isArchived ? (nets.every((net) => net === 0) ? "settled" : "unsettled") : "active",

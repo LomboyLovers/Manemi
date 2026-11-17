@@ -1,0 +1,303 @@
+/* Friends: rows, lists, picker, notifications. Manemi design tokens. */
+
+.mn-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.mn-friends-sub {
+  margin: -8px 0 16px;
+  text-align: center;
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 15px;
+  line-height: 21px;
+}
+.mn-friends-sub b {
+  color: var(--mn-text, #f5f5f7);
+}
+
+.mn-friends-search input,
+.mn-friends-field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 14px;
+  background: var(--mn-input, #25252b);
+  color: var(--mn-text, #f5f5f7);
+  font-size: 16px;
+  outline: 0;
+}
+.mn-friends-search input:focus,
+.mn-friends-field input:focus {
+  border-color: var(--mn-accent, #8b3dff);
+}
+.mn-friends-search {
+  margin-bottom: 12px;
+}
+
+/* List frame (L1 surface + hairlines) */
+.mn-friends-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 18px;
+  background: var(--mn-surface, #1c1c21);
+  overflow: hidden;
+}
+.mn-friends-list > li + li {
+  border-top: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-friends-pick {
+  max-height: 46dvh;
+  overflow-y: auto;
+}
+.mn-friend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 16px;
+  color: var(--mn-text, #f5f5f7);
+}
+label.mn-friend-row {
+  cursor: pointer;
+}
+.mn-friend-row.is-disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.mn-friend-row input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  accent-color: var(--mn-accent, #8b3dff);
+}
+.mn-friend-avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--mn-surface-3, #2f2f36);
+  font-weight: 700;
+}
+.mn-friend-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mn-friend-text strong {
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mn-friend-text small {
+  font-size: 13px;
+  color: var(--mn-muted, #a8a8b3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mn-friend-tag {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--mn-input, #25252b);
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.mn-friend-tag.is-accent {
+  background: color-mix(in srgb, var(--mn-accent, #8b3dff) 20%, transparent);
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.mn-friend-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+/* Buttons */
+.mn-friends-primary,
+.mn-friends-secondary,
+.mn-friends-danger {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mn-friends-primary {
+  border: 0;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  color: #fff;
+}
+.mn-friends-primary:disabled {
+  background: var(--mn-surface-3, #2f2f36);
+  color: var(--mn-tertiary, #8a8a95);
+  cursor: not-allowed;
+}
+.mn-friends-secondary {
+  border: 1px solid var(--mn-border, #3a3a43);
+  background: var(--mn-input, #25252b);
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-friends-danger {
+  border: 0;
+  background: color-mix(in srgb, var(--mn-negative, #ff6b6b) 14%, transparent);
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-friends-submit {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 16px;
+  font-size: 17px;
+}
+.mn-popup-cancel {
+  justify-self: start;
+  color: var(--mn-muted, #a8a8b3);
+  font-weight: 500;
+}
+
+/* States */
+.mn-friends-state {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--mn-muted, #a8a8b3);
+  text-align: center;
+}
+.mn-friends-empty {
+  text-align: center;
+  padding: 16px 8px 4px;
+  color: var(--mn-muted, #a8a8b3);
+}
+.mn-friends-empty strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--mn-text, #f5f5f7);
+  font-size: 18px;
+}
+.mn-friends-empty p {
+  margin: 0 auto 16px;
+  max-width: 340px;
+}
+.mn-friends-error,
+.mn-friends-notice {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.mn-friends-error {
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-friends-notice {
+  color: var(--mn-positive, #3ddc84);
+}
+
+.mn-friends-primary:focus-visible,
+.mn-friends-secondary:focus-visible,
+.mn-friends-danger:focus-visible,
+.mn-friend-row:focus-within {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: -2px;
+}
+@media (hover: hover) {
+  label.mn-friend-row:not(.is-disabled):hover {
+    background: var(--mn-input, #25252b);
+  }
+  .mn-friends-secondary:hover {
+    background: var(--mn-surface-3, #2f2f36);
+  }
+}
+
+/* ---------- Bell: notifications panel ---------- */
+.mn-bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--mn-negative, #ff6b6b);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.mn-notifications {
+  position: absolute;
+  right: 0;
+  top: 56px;
+  z-index: 40;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(70dvh, 560px);
+  overflow-y: auto;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 18px;
+  background: var(--mn-surface, #1c1c21);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  color: var(--mn-text, #f5f5f7);
+  text-align: left;
+}
+.mn-notifications h2 {
+  margin: 0;
+  padding: 14px 16px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--mn-tertiary, #8a8a95);
+}
+.mn-notification {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-notification p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mn-muted, #a8a8b3);
+}
+.mn-notification p b {
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-notification .mn-friend-actions .mn-friends-primary,
+.mn-notification .mn-friend-actions .mn-friends-secondary {
+  flex: 1;
+}
+.mn-notifications-empty {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 14px;
+}
+.mn-notifications-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-top: 1px solid var(--mn-border, #3a3a43);
+  color: var(--mn-accent-light, #c4a1ff);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}

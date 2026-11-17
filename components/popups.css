@@ -84,7 +84,7 @@
   inset: 0;
   z-index: 55; /* under the nav (60) so the ✕ stays reachable */
   background: rgba(0, 0, 0, 0.62);
-  font-family: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter, Inter), Inter, Arial, Helvetica, sans-serif;
   color: var(--mn-text, #f5f5f7);
 }
 .mn-popup-sheet-backdrop {

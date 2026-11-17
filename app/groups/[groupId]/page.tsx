@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import "./group-details.css";
 import GroupDetailsSkeleton from "@/components/GroupDetailsSkeleton";
 import AppNav from "@/components/AppNav";
+import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import { CATEGORY_META, categoryKey, isZero, peso } from "@/lib/manemi/format";
 import { buildLedger, sharesFromSplitRows } from "@/lib/manemi/ledger";
 
@@ -14,6 +15,7 @@ type Group = {
   groupId: string;
   name: string;
   createdBy: string;
+  isArchived?: boolean | null;
 };
 
 type GroupMember = { userId: string; name: string };
@@ -44,6 +46,8 @@ export default function GroupDetailsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [members, setMembers] = useState<GroupMember[]>([]);
+  const [myRole, setMyRole] = useState<"owner" | "admin" | "member">("member");
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [expenseSplits, setExpenseSplits] = useState<ExpenseSplit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -90,12 +94,12 @@ export default function GroupDetailsPage() {
         await Promise.all([
           supabase
             .from("Group")
-            .select("groupId, name, createdBy")
+            .select("groupId, name, createdBy, isArchived")
             .eq("groupId", params.groupId)
             .maybeSingle(),
           supabase
             .from("Group_Member")
-            .select("userId")
+            .select("userId, role")
             .eq("groupId", params.groupId),
           supabase
             .from("Expense")
@@ -114,6 +118,13 @@ export default function GroupDetailsPage() {
         setLoading(false);
         return;
       }
+      setMyRole(
+        ((memberRows ?? []).find((row) => row.userId === me.id)?.role as
+          | "owner"
+          | "admin"
+          | "member"
+          | undefined) ?? "member",
+      );
       const memberIds = [
         ...new Set((memberRows ?? []).map((row) => row.userId as string)),
       ];
@@ -235,6 +246,9 @@ export default function GroupDetailsPage() {
       active = false;
     };
   }, [params.groupId, refreshExpenses]);
+
+  const canInvite =
+    Boolean(group) && !group?.isArchived && (myRole === "owner" || myRole === "admin");
 
   // Balances from each expense's real participants (see lib/manemi/ledger).
   const ledger = useMemo(() => {
@@ -435,21 +449,15 @@ export default function GroupDetailsPage() {
           </Link>
 
           <div className="md-top-actions">
-            <button
-              type="button"
-              aria-label="Copy group link"
-              title="Copy group link"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(window.location.href);
-                  setExpenseNotice("Group link copied");
-                } catch {
-                  setExpenseNotice("Unable to copy link");
-                }
-              }}
-            >
-              🔗
-            </button>
+            {canInvite && (
+              <button
+                type="button"
+                className="md-invite-button"
+                onClick={() => setInviteOpen(true)}
+              >
+                <span aria-hidden="true">＋</span> Invite Friends
+              </button>
+            )}
 
             <div className="md-menu-wrap">
               <button
@@ -462,7 +470,40 @@ export default function GroupDetailsPage() {
               </button>
 
               {menuOpen && (
-                <div className="md-menu">More group actions coming soon</div>
+                <div className="md-menu" role="menu">
+                  {canInvite && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setInviteOpen(true);
+                      }}
+                    >
+                      Invite Friends
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={async () => {
+                      setMenuOpen(false);
+                      try {
+                        await navigator.clipboard.writeText(window.location.href);
+                        setExpenseNotice("Group link copied (members only)");
+                      } catch {
+                        setExpenseNotice("Unable to copy link");
+                      }
+                    }}
+                  >
+                    Copy Group Link
+                  </button>
+                  {!canInvite && (
+                    <p className="md-menu-note">
+                      Only the owner or an admin can invite people.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -491,7 +532,7 @@ export default function GroupDetailsPage() {
                     {memberCount} member
                     {memberCount !== 1 ? "s" : ""} ·{" "}
                     <span className="md-admin">
-                      {group.createdBy === currentUserId ? "Admin" : "Member"}
+                      {myRole === "owner" ? "Owner" : myRole === "admin" ? "Admin" : "Member"}
                     </span>
                   </p>
                 </div>
@@ -568,13 +609,15 @@ export default function GroupDetailsPage() {
                     Add First Expense
                   </button>
 
-                  <button
-                    type="button"
-                    className="md-invite-members"
-                    onClick={() => alert("Member invitations coming soon.")}
-                  >
-                    🔗 Invite Members
-                  </button>
+                  {canInvite && (
+                    <button
+                      type="button"
+                      className="md-invite-members"
+                      onClick={() => setInviteOpen(true)}
+                    >
+                      <span aria-hidden="true">＋</span> Invite Friends
+                    </button>
+                  )}
                 </section>
               ) : (
                 <section className="md-expenses-section">
@@ -948,6 +991,15 @@ export default function GroupDetailsPage() {
       )}
 
       <AppNav active="groups" />
+
+      {inviteOpen && group && (
+        <InviteFriendsSheet
+          groupId={group.groupId}
+          groupName={group.name}
+          memberIds={members.map((member) => member.userId)}
+          onClose={() => setInviteOpen(false)}
+        />
+      )}
     </main>
   );
 }

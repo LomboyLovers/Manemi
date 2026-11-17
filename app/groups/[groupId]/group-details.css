@@ -1415,3 +1415,49 @@
   min-width: 44px;
   justify-content: center;
 }
+
+/* Invite Friends (owner/admin) and the ••• menu */
+.md-top-actions .md-invite-button {
+  width: auto;
+  min-height: 44px;
+  height: auto;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.md-menu {
+  width: 220px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.md-top-actions .md-menu button {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mn-text, #f5f5f7);
+  font-size: 14px;
+  text-align: left;
+}
+.md-menu-note {
+  margin: 4px 0 0;
+  padding: 8px 12px 6px;
+  border-top: 1px solid #52485c;
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 12px;
+  line-height: 16px;
+}
+@media (hover: hover) {
+  .md-top-actions .md-menu button:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
