@@ -1,0 +1,190 @@
+/* ==========================================
+   APP NAVIGATION
+   narrow (<768px): floating bottom pill + round + button
+   medium/wide (≥768px): fixed left sidebar
+   ========================================== */
+
+:root {
+  --mn-sidebar-width: 240px;
+  --vp-wide: 1280px;
+}
+
+.mn-nav {
+  position: fixed;
+  z-index: 60;
+  font-family: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
+}
+
+.mn-nav-link,
+.mn-nav-brand {
+  color: var(--mn-muted, #a8a8b3);
+  text-decoration: none;
+}
+.mn-nav-link img {
+  opacity: 0.8;
+}
+.mn-nav-link.is-active img {
+  opacity: 1;
+}
+.mn-nav-link:focus-visible,
+.mn-nav-add:focus-visible,
+.mn-nav-brand:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+
+.mn-nav-add {
+  border: 0;
+  cursor: pointer;
+  color: #fff;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  box-shadow: 0 8px 24px rgba(139, 61, 255, 0.3);
+  touch-action: manipulation;
+}
+.mn-nav-add > span[aria-hidden="true"] {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 400;
+}
+
+/* ---------- narrow: bottom pill ---------- */
+@media (max-width: 767.98px) {
+  .mn-nav {
+    left: 16px;
+    right: 16px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .mn-nav > * {
+    pointer-events: auto;
+  }
+  .mn-nav-brand {
+    display: none;
+  }
+  .mn-nav-links {
+    flex: 1;
+    display: flex;
+    gap: 4px;
+    padding: 5px;
+    border: 1px solid var(--mn-border, #3a3a43);
+    border-radius: 999px;
+    background: var(--mn-surface, #1c1c21);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.35);
+  }
+  .mn-nav-link {
+    flex: 1;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .mn-nav-link.is-active {
+    background: var(--mn-accent, #8b3dff);
+    color: #fff;
+  }
+  .mn-nav-add {
+    flex: none;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+  }
+  .mn-nav-add-label {
+    display: none;
+  }
+  main.mn-app-page.mn-app-page {
+    padding-bottom: 120px; /* FAB never covers content */
+  }
+}
+
+/* ---------- medium & wide: left sidebar ---------- */
+@media (min-width: 768px) {
+  .mn-nav {
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--mn-sidebar-width);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 24px 16px;
+    background: var(--mn-bg, #121214);
+    border-right: 1px solid var(--mn-border, #3a3a43);
+  }
+  .mn-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 8px;
+    margin-bottom: 16px;
+    color: var(--mn-text, #f5f5f7);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .mn-nav-brand img {
+    border-radius: 8px;
+  }
+  .mn-nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mn-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .mn-nav-link.is-active {
+    background: rgba(139, 61, 255, 0.16);
+    color: var(--mn-text, #f5f5f7);
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--mn-accent, #8b3dff);
+  }
+  .mn-nav-add {
+    order: -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    margin-bottom: 16px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .mn-nav-brand {
+    order: -2;
+  }
+
+  /* Pages sit to the right of the sidebar. Doubled class + element so page
+     stylesheets that set `padding` (e.g. the dashboard) can't undo it. */
+  main.mn-app-page.mn-app-page {
+    padding-left: var(--mn-sidebar-width);
+  }
+}
+
+@media (min-width: 768px) and (hover: hover) {
+  .mn-nav-link:not(.is-active):hover {
+    background: var(--mn-surface, #1c1c21);
+    color: var(--mn-text, #f5f5f7);
+  }
+  .mn-nav-add:hover {
+    filter: brightness(1.08);
+  }
+}

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AddExpensePicker from "@/components/AddExpensePicker";
+import AppNav from "@/components/AppNav";
 import {
   loadGroupsData,
   totalsFor,
@@ -77,7 +77,8 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="manemi-dashboard manemi-dashboard-v2">
+    <main className="manemi-dashboard manemi-dashboard-v2 mn-app-page">
+      <div className="dashboard-container">
       <div className="dashboard-content">
         <header className="dashboard-header">
           <div className="dashboard-avatar">{initialOf(userName || "?")}</div>
@@ -269,35 +270,9 @@ export default function Dashboard() {
           </>
         )}
       </div>
+      </div>
 
-      <nav className="dashboard-bottom-nav" aria-label="Dashboard navigation">
-        <div className="nav-pill">
-          <Link
-            href="/dashboard"
-            className="nav-item active"
-            aria-current="page"
-          >
-            <Image src="/icons/home.png" alt="" width={20} height={20} />
-            <span>Home</span>
-          </Link>
-          <Link href="/groups" className="nav-item">
-            <Image src="/icons/group.png" alt="" width={20} height={20} />
-            <span>Groups</span>
-          </Link>
-          <Link href="/history" className="nav-item">
-            <Image src="/icons/clock.png" alt="" width={20} height={20} />
-            <span>History</span>
-          </Link>
-        </div>
-        <button
-          type="button"
-          className="dashboard-add-button"
-          aria-label="Add new expense"
-          onClick={() => setShowAddModal(true)}
-        >
-          <Image src="/icons/plus.png" alt="" width={22} height={22} />
-        </button>
-      </nav>
+      <AppNav active="home" onAdd={() => setShowAddModal(true)} />
 
       {showAddModal && (
         <AddExpensePicker

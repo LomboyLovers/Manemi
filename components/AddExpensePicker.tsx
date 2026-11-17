@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { GroupSummary } from "@/lib/manemi/groups";
 import { isZero, peso } from "@/lib/manemi/format";
@@ -27,19 +27,43 @@ export default function AddExpensePicker({ groups, onClose, onCreateGroup }: Pro
     if (onlyGroupId) router.push(`/groups/${onlyGroupId}/add-expense`);
   }, [onlyGroupId, router]);
 
+  const sheetRef = useRef<HTMLElement>(null);
+
+  // Modal focus: move in on open, trap Tab, Escape closes, restore on close.
   useEffect(() => {
+    if (onlyGroupId) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const focusables = () =>
+      [...(sheetRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])") ?? [])];
+    focusables()[0]?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      previous?.focus?.();
+    };
+  }, [onClose, onlyGroupId]);
 
   if (onlyGroupId) return null;
 
   return (
     <div className="manemi-actions-overlay" onClick={onClose}>
       <section
+        ref={sheetRef}
         className="manemi-actions-sheet"
         role="dialog"
         aria-modal="true"

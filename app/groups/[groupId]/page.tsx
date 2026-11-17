@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import "./group-details.css";
 import GroupDetailsSkeleton from "@/components/GroupDetailsSkeleton";
-import Image from "next/image";
-import { isZero, peso } from "@/lib/manemi/format";
+import AppNav from "@/components/AppNav";
+import { CATEGORY_META, categoryKey, isZero, peso } from "@/lib/manemi/format";
+import { buildLedger, sharesFromSplitRows } from "@/lib/manemi/ledger";
 
 type Group = {
   groupId: string;
@@ -16,7 +17,10 @@ type Group = {
 };
 
 type GroupMember = { userId: string; name: string };
-type ExpenseSplit = { expenseId: string; userId: string };
+type ExpenseSplit = Record<string, unknown> & {
+  expenseId: string;
+  userId: string;
+};
 
 type Expense = {
   expenseId: string;
@@ -26,14 +30,6 @@ type Expense = {
   expenseDate: string;
   category: string | null;
   receiptUrl: string | null;
-};
-
-type MemberBalance = { userId?: string; net: number };
-
-type BalancesResponse = {
-  error?: string;
-  members?: Array<{ userId?: string; net: number | string }>;
-  summary?: { owedToYou?: number | string; youOwe?: number | string };
 };
 
 const formatPeso = peso;
@@ -62,8 +58,6 @@ export default function GroupDetailsPage() {
   const [activeTab, setActiveTab] = useState<"expenses" | "balances">(
     "expenses",
   );
-  const [myNet, setMyNet] = useState<number | null>(null);
-  const [memberBalances, setMemberBalances] = useState<MemberBalance[]>([]);
   const [balanceError, setBalanceError] = useState("");
 
   useEffect(() => {
@@ -90,7 +84,7 @@ export default function GroupDetailsPage() {
 
       // Everything below only needs the group ID, so load it in parallel.
       // The roster doubles as the membership check.
-      const [groupResult, rosterResult, expenseResult, balanceResult] =
+      const [groupResult, rosterResult, expenseResult] =
         await Promise.all([
           supabase
             .from("Group")
@@ -108,9 +102,6 @@ export default function GroupDetailsPage() {
             )
             .eq("groupId", params.groupId)
             .order("expenseDate", { ascending: false }),
-          supabase.functions.invoke<BalancesResponse>("get-balances", {
-            body: { groupId: params.groupId },
-          }),
         ]);
 
       if (!active) return;
@@ -138,34 +129,6 @@ export default function GroupDetailsPage() {
       }
       setGroup(data);
 
-      // Personal balance and per-member nets from get-balances.
-      const balances = balanceResult.data;
-      if (
-        balanceResult.error ||
-        balances?.error ||
-        !Array.isArray(balances?.members)
-      ) {
-        setBalanceError(
-          balanceResult.error?.message ??
-            balances?.error ??
-            "Balances are unavailable right now.",
-        );
-        setMyNet(null);
-        setMemberBalances([]);
-      } else {
-        setBalanceError("");
-        setMyNet(
-          (Number(balances.summary?.owedToYou ?? 0) || 0) -
-            (Number(balances.summary?.youOwe ?? 0) || 0),
-        );
-        setMemberBalances(
-          balances.members.map((member) => ({
-            userId: member.userId,
-            net: Number(member.net) || 0,
-          })),
-        );
-      }
-
       const expenseData = expenseResult.data;
       const expenseIds = (expenseData ?? []).map((item) => item.expenseId);
 
@@ -177,7 +140,8 @@ export default function GroupDetailsPage() {
         expenseIds.length
           ? supabase
               .from("Expense_Split")
-              .select("expenseId, userId")
+              // Whole rows: the share column name isn't known to the frontend.
+              .select("*")
               .in("expenseId", expenseIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -214,6 +178,11 @@ export default function GroupDetailsPage() {
         setError("Unable to load group expenses.");
       } else {
         setExpenses(expenseData ?? []);
+        setBalanceError(
+          splitsResult.error
+            ? "Balances are unavailable: expense participants couldn't be loaded."
+            : "",
+        );
         if (splitsResult.error) {
           console.warn(
             "Unable to load expense participants:",
@@ -226,6 +195,15 @@ export default function GroupDetailsPage() {
         // Read the saved expense ID after returning from Add Expense.
         // Match it against the database result, not a hardcoded title/amount.
         const paramsFromUrl = new URLSearchParams(window.location.search);
+        // History links here with ?expense=<id> to open that expense.
+        const openId = paramsFromUrl.get("expense");
+        if (openId) {
+          const target = (expenseData ?? []).find(
+            (item) => item.expenseId === openId,
+          );
+          if (target) setSelectedExpense(target);
+          paramsFromUrl.delete("expense");
+        }
         const addedId = paramsFromUrl.get("expenseAdded");
         if (addedId) {
           const match = (expenseData ?? []).find(
@@ -236,6 +214,8 @@ export default function GroupDetailsPage() {
             setExpenseNotice("");
           }
           paramsFromUrl.delete("expenseAdded");
+        }
+        if (openId || addedId) {
           const remaining = paramsFromUrl.toString();
           window.history.replaceState(
             window.history.state,
@@ -254,6 +234,50 @@ export default function GroupDetailsPage() {
       active = false;
     };
   }, [params.groupId, refreshExpenses]);
+
+  // Balances from each expense's real participants (see lib/manemi/ledger).
+  const ledger = useMemo(() => {
+    const splitsByExpense = new Map<string, ExpenseSplit[]>();
+    for (const split of expenseSplits) {
+      const list = splitsByExpense.get(split.expenseId) ?? [];
+      list.push(split);
+      splitsByExpense.set(split.expenseId, list);
+    }
+    return buildLedger(
+      expenses.map((expense) => {
+        const totalCents = Math.round(Number(expense.totalAmount) * 100) || 0;
+        let shares = sharesFromSplitRows(
+          totalCents,
+          splitsByExpense.get(expense.expenseId) ?? [],
+        );
+        if (!shares.length) {
+          // Older expenses without participant rows: everyone in the group.
+          shares = sharesFromSplitRows(
+            totalCents,
+            members.map((member) => ({
+              expenseId: expense.expenseId,
+              userId: member.userId,
+            })),
+          );
+        }
+        return {
+          id: expense.expenseId,
+          groupId: params.groupId,
+          payerId: expense.paidBy_UserId,
+          totalCents,
+          shares,
+        };
+      }),
+    );
+  }, [expenses, expenseSplits, members, params.groupId]);
+
+  const myBalance = currentUserId ? ledger.forUser(currentUserId) : null;
+  const myNet = balanceError || !myBalance ? null : myBalance.net / 100;
+  const memberNets = useMemo(() => ledger.memberNets(), [ledger]);
+  const memberBalances = members.map((member) => ({
+    userId: member.userId,
+    net: (memberNets.get(member.userId) ?? 0) / 100,
+  }));
 
   // Toasts dismiss themselves after a few seconds.
   useEffect(() => {
@@ -401,7 +425,8 @@ export default function GroupDetailsPage() {
   const averagePerPerson = memberCount > 0 ? totalExpenses / memberCount : 0;
 
   return (
-    <main className="manemi-detail-page">
+    <main className="manemi-detail-page mn-app-page">
+      <div className="md-container">
       <div className="manemi-detail-content">
         <header className="md-topbar">
           <Link href="/groups" className="md-back">
@@ -575,48 +600,81 @@ export default function GroupDetailsPage() {
                   </div>
 
                   {activeTab === "balances" ? (
-                    <div className="md-balances" role="tabpanel">
+                    <div role="tabpanel" className="md-balances-panel">
                       {balanceError ? (
                         <p className="md-no-transactions">{balanceError}</p>
                       ) : (
-                        [...memberBalances]
-                          .sort((a, b) => b.net - a.net)
-                          .map((member, index) => {
-                            const isMe = member.userId === currentUserId;
-                            const label = member.userId
-                              ? isMe
-                                ? "You"
-                                : memberName(member.userId)
-                              : `Member ${index + 1}`;
-                            const cls = isZero(member.net)
-                              ? "md-balance-zero"
-                              : member.net > 0
-                                ? "md-balance-positive"
-                                : "md-balance-negative";
-                            return (
-                              <div
-                                key={member.userId ?? index}
-                                className={`md-balance-row ${cls}`}
-                              >
-                                <span className="md-balance-avatar" aria-hidden="true">
-                                  {label.charAt(0).toUpperCase()}
-                                </span>
-                                <div className="md-balance-name">
-                                  <strong>{label}</strong>
-                                  <small>
-                                    {isZero(member.net)
-                                      ? "✓ Settled up"
-                                      : member.net > 0
-                                        ? `↙ ${isMe ? "Are" : "Is"} owed`
-                                        : `↗ ${isMe ? "Owe" : "Owes"}`}
-                                  </small>
-                                </div>
-                                <strong className="md-balance-amount">
-                                  {formatPeso(Math.abs(member.net))}
-                                </strong>
-                              </div>
-                            );
-                          })
+                        <>
+                          <h2 className="md-balances-heading">Your breakdown</h2>
+                          <div className="md-balances">
+                            {myBalance && myBalance.counterparties.length ? (
+                              myBalance.counterparties.map((item) => {
+                                const name = memberName(item.userId);
+                                const owesYou = item.cents > 0;
+                                return (
+                                  <div
+                                    key={item.userId}
+                                    className={`md-balance-row ${owesYou ? "md-balance-positive" : "md-balance-negative"}`}
+                                  >
+                                    <span className="md-balance-avatar" aria-hidden="true">
+                                      {name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <div className="md-balance-name">
+                                      <strong>
+                                        {owesYou ? `${name} owes you` : `You owe ${name}`}
+                                      </strong>
+                                      <small>
+                                        {owesYou ? "↙ Owed to you" : "↗ Your debt"}
+                                      </small>
+                                    </div>
+                                    <strong className="md-balance-amount">
+                                      {formatPeso(Math.abs(item.cents) / 100)}
+                                    </strong>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p className="md-balances-empty">
+                                ✓ You&apos;re square with everyone in this group.
+                              </p>
+                            )}
+                          </div>
+
+                          <h2 className="md-balances-heading">Everyone</h2>
+                          <div className="md-balances">
+                            {[...memberBalances]
+                              .sort((a, b) => b.net - a.net)
+                              .map((member) => {
+                                const isMe = member.userId === currentUserId;
+                                const label = isMe ? "You" : memberName(member.userId);
+                                const cls = isZero(member.net)
+                                  ? "md-balance-zero"
+                                  : member.net > 0
+                                    ? "md-balance-positive"
+                                    : "md-balance-negative";
+                                return (
+                                  <div key={member.userId} className={`md-balance-row ${cls}`}>
+                                    <span className="md-balance-avatar" aria-hidden="true">
+                                      {label.charAt(0).toUpperCase()}
+                                    </span>
+                                    <div className="md-balance-name">
+                                      <strong>{label}</strong>
+                                      <small>
+                                        {isZero(member.net)
+                                          ? "✓ Settled up"
+                                          : member.net > 0
+                                            ? `↙ ${isMe ? "Are" : "Is"} owed overall`
+                                            : `↗ ${isMe ? "Owe" : "Owes"} overall`}
+                                      </small>
+                                    </div>
+                                    <strong className="md-balance-amount">
+                                      {formatPeso(Math.abs(member.net))}
+                                    </strong>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </>
                       )}
                     </div>
                   ) : (
@@ -629,8 +687,12 @@ export default function GroupDetailsPage() {
                         className={activeCategory === category ? "active" : ""}
                         onClick={() => setActiveCategory(category)}
                       >
-                        {category !== "All" && categoryIcon(category)}
-                        {category}
+                        {category !== "All" && (
+                          <span aria-hidden="true">{categoryIcon(category)}</span>
+                        )}
+                        {category === "All"
+                          ? "All"
+                          : CATEGORY_META[categoryKey(category)].label}
                       </button>
                     ))}
                   </div>
@@ -662,7 +724,12 @@ export default function GroupDetailsPage() {
 
                           <div className="md-transaction-info">
                             <h3>{expense.title}</h3>
-                            <p>Paid by {memberName(expense.paidBy_UserId)}</p>
+                            <p>
+                              Paid by{" "}
+                              {expense.paidBy_UserId === currentUserId
+                                ? "you"
+                                : memberName(expense.paidBy_UserId)}
+                            </p>
                             <small>
                               {new Date(expense.expenseDate).toLocaleDateString(
                                 "en-PH",
@@ -679,7 +746,15 @@ export default function GroupDetailsPage() {
                             <strong>
                               {formatPeso(Number(expense.totalAmount))}
                             </strong>
-                            <span>{expense.category ?? "Other"}</span>
+                            <span
+                              className="md-category-tag"
+                              style={{
+                                color: CATEGORY_META[categoryKey(expense.category)].color,
+                                background: `color-mix(in srgb, ${CATEGORY_META[categoryKey(expense.category)].color} 16%, transparent)`,
+                              }}
+                            >
+                              {CATEGORY_META[categoryKey(expense.category)].label}
+                            </span>
                           </div>
                         </article>
                       ))
@@ -692,6 +767,7 @@ export default function GroupDetailsPage() {
             </>
           )
         )}
+      </div>
       </div>
 
       {/* Expense Details and Delete Confirmation */}
@@ -783,7 +859,7 @@ export default function GroupDetailsPage() {
                     </strong>
                   </div>
                   <span className="md-sheet-category">
-                    {selectedExpense.category ?? "Other"}
+                    {CATEGORY_META[categoryKey(selectedExpense.category)].label}
                   </span>
                 </div>
 
@@ -870,34 +946,7 @@ export default function GroupDetailsPage() {
         </div>
       )}
 
-      <nav className="md-bottom" aria-label="Main navigation">
-        <div className="md-bottom-pill">
-          <Link href="/dashboard">
-            <Image src="/icons/home.png" alt="" width={20} height={20} />
-            <span>Home</span>
-          </Link>
-
-          <Link href="/groups" className="active" aria-current="page">
-            <Image src="/icons/group.png" alt="" width={20} height={20} />
-            <span>Groups</span>
-          </Link>
-
-          <Link href="/history">
-            <Image src="/icons/clock.png" alt="" width={20} height={20} />
-            <span>History</span>
-          </Link>
-        </div>
-
-        <button
-          type="button"
-          className="md-plus"
-          onClick={openAddExpense}
-          aria-label="Add expense"
-          title="Add expense"
-        >
-          <Image src="/icons/plus.png" alt="" width={24} height={24} />
-        </button>
-      </nav>
+      <AppNav active="groups" onAdd={openAddExpense} />
     </main>
   );
 }

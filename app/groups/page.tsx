@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import "./groups-enhanced.css";
@@ -13,13 +12,13 @@ import "./groups-invitations.css";
 import "./groups-balance-card.css";
 import GroupsSkeleton from "@/components/GroupSkeleton";
 import AddExpensePicker from "@/components/AddExpensePicker";
+import AppNav from "@/components/AppNav";
 import {
   loadGroupsData,
   totalsFor,
   type GroupSummary,
 } from "@/lib/manemi/groups";
 import {
-  CATEGORY_META,
   greeting,
   initialOf,
   isZero,
@@ -505,7 +504,7 @@ export default function GroupsPage() {
   const closeAddPicker = useCallback(() => setShowAddModal(false), []);
   if (initialPageLoading) {
     return (
-      <main className="manemi-groups-page">
+      <main className="manemi-groups-page mn-app-page">
         <div className="groups-page-content">
           <div className="manemi-groups-skeleton-container">
             <GroupsSkeleton />
@@ -515,7 +514,7 @@ export default function GroupsPage() {
     );
   }
   return (
-    <main className="manemi-groups-page">
+    <main className="manemi-groups-page mn-app-page">
       <div className="groups-page-content">
         {/* HEADER */}
         {loadingGroups || groups.length > 0 || Boolean(search) ? (
@@ -880,65 +879,59 @@ export default function GroupsPage() {
 
                             <div
                               className="manemi-card-breakdown"
-                              aria-label={`Expense breakdown for ${group.name}`}
+                              aria-label={`Balance breakdown for ${group.name}`}
                             >
                               <span className="manemi-card-overline">
-                                Expenses
+                                Breakdown
                               </span>
-                              {group.expenseCount === 0 ? (
+                              {group.counterparties.length === 0 ? (
                                 <p className="manemi-breakdown-empty">
-                                  No expenses yet
+                                  {group.expenseCount === 0
+                                    ? "No expenses yet"
+                                    : "You're square with everyone"}
                                 </p>
                               ) : (
-                                <>
-                                  <p className="manemi-breakdown-total">
-                                    {peso(group.spent)}
-                                    <small>
-                                      {" "}
-                                      · {group.expenseCount}{" "}
-                                      {group.expenseCount === 1
-                                        ? "expense"
-                                        : "expenses"}
-                                    </small>
-                                  </p>
-                                  <div
-                                    className="manemi-breakdown-bar"
-                                    aria-hidden="true"
-                                  >
-                                    {group.breakdown.map((slice) => (
-                                      <span
-                                        key={slice.key}
-                                        style={{
-                                          width: `${(slice.amount / group.spent) * 100}%`,
-                                          background:
-                                            CATEGORY_META[slice.key].color,
-                                        }}
-                                      />
-                                    ))}
-                                  </div>
-                                  <ul className="manemi-breakdown-list">
-                                    {group.breakdown.slice(0, 3).map((slice) => (
-                                      <li key={slice.key}>
-                                        <i
-                                          aria-hidden="true"
-                                          style={{
-                                            background:
-                                              CATEGORY_META[slice.key].color,
-                                          }}
-                                        />
-                                        <span>
-                                          {CATEGORY_META[slice.key].label}
-                                        </span>
-                                        <b>{peso(slice.amount)}</b>
-                                      </li>
-                                    ))}
-                                    {group.breakdown.length > 3 && (
-                                      <li className="manemi-breakdown-more">
-                                        +{group.breakdown.length - 3} more
-                                      </li>
-                                    )}
-                                  </ul>
-                                </>
+                                <ul className="manemi-breakdown-list">
+                                  {group.counterparties.slice(0, 3).map((person) => (
+                                    <li
+                                      key={person.userId}
+                                      className={
+                                        person.amount > 0
+                                          ? "manemi-debt-in"
+                                          : "manemi-debt-out"
+                                      }
+                                    >
+                                      <span className="manemi-debt-text">
+                                        <span aria-hidden="true">
+                                          {person.amount > 0 ? "↙" : "↗"}
+                                        </span>{" "}
+                                        {person.amount > 0 ? (
+                                          <>
+                                            <b>{person.name}</b> owes you
+                                          </>
+                                        ) : (
+                                          <>
+                                            You owe <b>{person.name}</b>
+                                          </>
+                                        )}
+                                      </span>
+                                      <strong>{peso(Math.abs(person.amount))}</strong>
+                                    </li>
+                                  ))}
+                                  {group.counterparties.length > 3 && (
+                                    <li className="manemi-breakdown-more">
+                                      +{group.counterparties.length - 3} more in
+                                      this group
+                                    </li>
+                                  )}
+                                </ul>
+                              )}
+                              {group.expenseCount > 0 && (
+                                <p className="manemi-breakdown-spent">
+                                  {peso(group.spent)} spent ·{" "}
+                                  {group.expenseCount}{" "}
+                                  {group.expenseCount === 1 ? "expense" : "expenses"}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -960,47 +953,7 @@ export default function GroupsPage() {
         )}
       </div>
 
-      {/* BOTTOM NAVIGATION */}
-
-      <nav className="groups-bottom-navigation" aria-label="Main navigation">
-        <div className="groups-nav-pill">
-          {/* HOME */}
-
-          <Link href="/dashboard" className="groups-nav-item">
-            <CustomIcon name="home" size={20} />
-            <span>Home</span>
-          </Link>
-
-          {/* GROUPS — ACTIVE */}
-
-          <Link
-            href="/groups"
-            className="groups-nav-item groups-nav-item-active"
-            aria-current="page"
-          >
-            <CustomIcon name="group" size={20} />
-            <span>Groups</span>
-          </Link>
-
-          {/* HISTORY */}
-
-          <Link href="/history" className="groups-nav-item">
-            <CustomIcon name="clock" size={20} />
-            <span>History</span>
-          </Link>
-        </div>
-
-        {/* ADD BUTTON */}
-
-        <button
-          type="button"
-          className="groups-nav-add manemi-groups-add-button"
-          aria-label="Add expense"
-          onClick={() => setShowAddModal(true)}
-        >
-          <CustomIcon name="plus" size={22} />
-        </button>
-      </nav>
+      <AppNav active="groups" onAdd={() => setShowAddModal(true)} />
 
       {/* GROUP ACTIONS BOTTOM SHEET */}
       {selectedGroup && (

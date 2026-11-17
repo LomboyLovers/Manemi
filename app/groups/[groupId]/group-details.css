@@ -1338,3 +1338,61 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.md-balances-heading {
+  margin: 20px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--mn-tertiary, #8a8a95);
+}
+.md-balances-empty {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--mn-muted, #a8a8b3);
+  background: var(--mn-surface, #1c1c21);
+}
+
+/* ==========================================
+   DESKTOP: summary on the left (sticky), expenses on the right.
+   Container query on the page, so the sidebar width is accounted for.
+   ========================================== */
+.md-container {
+  container-type: inline-size; /* on a wrapper: never on <main>, which holds fixed nav/sheets */
+}
+.md-category-tag {
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+@container (min-width: 960px) {
+  .manemi-detail-content {
+    width: min(100%, 1180px);
+    padding: 40px 40px 64px;
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    /* Last row soaks up the tall right column so the left stays compact. */
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: 40px;
+    align-items: start;
+  }
+  .manemi-detail-content > * {
+    grid-column: 1 / -1;
+  }
+  .manemi-detail-content > .md-group-heading {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .manemi-detail-content > .md-summary {
+    grid-column: 1;
+    grid-row: 3;
+    position: sticky;
+    top: 24px;
+  }
+  .manemi-detail-content > .md-expenses-section,
+  .manemi-detail-content > .md-first-expense {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+    margin-top: 0;
+  }
+}

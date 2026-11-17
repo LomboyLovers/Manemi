@@ -17,17 +17,13 @@
   margin-top: 18px;
 }
 
-/* Wide cards: breakdown fills the empty space beside the balance. */
+/* Wide cards: breakdown fills the empty space beside the balance.
+   Only the top divider line; no vertical line. */
 @container (min-width: 300px) {
   .manemi-card-body {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 20px;
     align-items: start;
-  }
-  .manemi-card-breakdown {
-    border-top: 0;
-    border-left: 1px solid var(--mn-border, #3a3a43);
-    padding: 0 0 0 16px;
   }
 }
 
@@ -89,64 +85,52 @@
   border-top: 1px solid var(--mn-border, #3a3a43);
   padding-top: 12px;
 }
-.manemi-breakdown-total {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--mn-text, #f5f5f7);
-}
-.manemi-breakdown-total small {
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--mn-muted, #a8a8b3);
-}
-.manemi-breakdown-bar {
-  display: flex;
-  gap: 2px;
-  height: 6px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--mn-surface-3, #2f2f36);
-}
-.manemi-breakdown-bar span {
-  min-width: 4px;
-  height: 100%;
-}
 .manemi-breakdown-list {
   list-style: none;
   margin: 2px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .manemi-breakdown-list li {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--mn-muted, #a8a8b3);
+  font-size: 13px;
+  line-height: 18px;
 }
-.manemi-breakdown-list i {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 2px;
-}
-.manemi-breakdown-list span {
+.manemi-debt-text {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--mn-muted, #a8a8b3);
 }
-.manemi-breakdown-list b {
+.manemi-debt-text b {
+  font-weight: 600;
+  color: var(--mn-text, #f5f5f7);
+}
+.manemi-breakdown-list strong {
+  flex: none;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--mn-text, #f5f5f7);
+}
+.manemi-debt-out .manemi-debt-text > span,
+.manemi-debt-out strong {
+  color: var(--mn-negative, #ff6b6b);
+}
+.manemi-debt-in .manemi-debt-text > span,
+.manemi-debt-in strong {
+  color: var(--mn-positive, #3ddc84);
+}
+.manemi-breakdown-spent {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--mn-tertiary, #8a8a95);
+  font-variant-numeric: tabular-nums;
 }
 .manemi-breakdown-more {
   color: var(--mn-tertiary, #8a8a95);
@@ -215,4 +199,11 @@
   color: var(--mn-muted, #a8a8b3);
   font-size: 22px;
   cursor: pointer;
+}
+
+/* Phones: one card per row so the breakdown stays readable. */
+@media (max-width: 767.98px) {
+  .manemi-rich-group-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

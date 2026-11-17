@@ -3199,3 +3199,25 @@ button:disabled {
 .manemi-dashboard-v2 .dashboard-empty a {
   color: var(--mn-accent-light, #c4a1ff);
 }
+
+/* ==========================================
+   HOME (dashboard) — desktop width
+   ========================================== */
+.manemi-dashboard-v2 .dashboard-container {
+  container-type: inline-size; /* wrapper, not <main>: keeps fixed nav/sheets on the viewport */
+}
+@container (min-width: 720px) {
+  .manemi-dashboard-v2 .dashboard-content {
+    max-width: 1080px;
+    padding-inline: 40px;
+  }
+  /* Recent groups: a wrapping grid instead of a sideways scroller. */
+  .manemi-dashboard-v2 .groups-scroll {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    overflow: visible;
+  }
+  .manemi-dashboard-v2 .group-card {
+    flex: none;
+  }
+}
