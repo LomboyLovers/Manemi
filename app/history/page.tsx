@@ -13,12 +13,15 @@ import {
   type HistoryExpense,
 } from "@/lib/manemi/groups";
 import { CATEGORY_META, peso } from "@/lib/manemi/format";
+import { ACTIVITY_META, loadActivity, type ActivityItem } from "@/lib/manemi/activity";
+import { useDataVersion } from "@/lib/manemi/events";
 import "./history.css";
 
 // Pattern 10 (Inbox / Activity Feed), variant A: a standalone, newest-first
-// feed of expenses and payments across every group.
+// feed of expenses and payments across every group, plus the audit log
+// (who added, edited, deleted, paid or cancelled what).
 
-type Kind = "all" | "expenses" | "payments";
+type Kind = "all" | "expenses" | "payments" | "activity";
 type Sort = "newest" | "oldest" | "largest";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -42,10 +45,10 @@ function shortDate(date: Date, withYear: boolean) {
 }
 
 /** Today, Yesterday, then one section per week labelled by its date span. */
-function groupByDate(items: HistoryExpense[], now = new Date()) {
+function groupByDate<T extends { date: string }>(items: T[], now = new Date()) {
   const today = startOfDay(now);
-  const sections: Array<{ key: string; label: string; items: HistoryExpense[] }> = [];
-  const byKey = new Map<string, HistoryExpense[]>();
+  const sections: Array<{ key: string; label: string; items: T[] }> = [];
+  const byKey = new Map<string, T[]>();
 
   for (const item of items) {
     const date = new Date(item.date);
@@ -110,13 +113,17 @@ export default function HistoryPage() {
   const optionsRef = useRef<HTMLDivElement>(null);
   const optionsButtonRef = useRef<HTMLButtonElement>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const dataVersion = useDataVersion();
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activityError, setActivityError] = useState("");
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError("");
-    loadGroupsData(createClient())
-      .then((result) => {
+    const supabase = createClient();
+    loadGroupsData(supabase)
+      .then(async (result) => {
         if (!active || !result) return;
         setUserId(result.user.id);
         setUser(result.user);
@@ -124,6 +131,15 @@ export default function HistoryPage() {
         setExpenses(result.expenses);
         if (result.warnings.length)
           setError(`Some activity could not be loaded: ${result.warnings.join("; ")}`);
+        try {
+          const log = await loadActivity(supabase, result.user.id, result.groups);
+          if (active) {
+            setActivity(log);
+            setActivityError("");
+          }
+        } catch (reason) {
+          if (active) setActivityError(reason instanceof Error ? reason.message : "Couldn't load the audit log.");
+        }
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : "Unable to load history.");
@@ -134,7 +150,7 @@ export default function HistoryPage() {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, dataVersion]);
 
   // Options popover: close on outside click or Escape.
   useEffect(() => {
@@ -175,6 +191,30 @@ export default function HistoryPage() {
     return list;
   }, [expenses, kind, groupId, onlyMine, search, sort]);
 
+  const isLog = kind === "activity";
+  const filteredLog = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const list = activity.filter(
+      (item) =>
+        (groupId === "all" || item.groupId === groupId) &&
+        (!onlyMine || item.involvesYou) &&
+        (!query ||
+          item.title.toLowerCase().includes(query) ||
+          item.detail.toLowerCase().includes(query) ||
+          item.groupName.toLowerCase().includes(query)),
+    );
+    if (sort === "oldest") return [...list].reverse();
+    if (sort === "largest") return [...list].sort((a, b) => b.amount - a.amount);
+    return list;
+  }, [activity, groupId, onlyMine, search, sort]);
+  const logSections = useMemo(
+    () =>
+      sort === "largest"
+        ? [{ key: "largest", label: "LARGEST FIRST", items: filteredLog }]
+        : groupByDate(filteredLog),
+    [filteredLog, sort],
+  );
+
   // Sections follow the list order, so "oldest first" needs no extra work.
   const sections = useMemo(
     () =>
@@ -195,8 +235,10 @@ export default function HistoryPage() {
   };
   const closeAdd = useCallback(() => setShowAdd(false), []);
 
-  const groupOptions = groups.filter((group) =>
-    expenses.some((item) => item.groupId === group.id),
+  const groupOptions = groups.filter(
+    (group) =>
+      expenses.some((item) => item.groupId === group.id) ||
+      activity.some((item) => item.groupId === group.id),
   );
 
   return (
@@ -246,7 +288,7 @@ export default function HistoryPage() {
                     checked={onlyMine}
                     onChange={(event) => setOnlyMine(event.target.checked)}
                   />
-                  Only expenses I&apos;m part of
+                  {isLog ? "Only activity involving me" : "Only expenses I'm part of"}
                 </label>
               </div>
             )}
@@ -255,7 +297,11 @@ export default function HistoryPage() {
 
         <div className="mn-history-heading">
           <h1>History</h1>
-          <p>Every expense and payment across your groups.</p>
+          <p>
+            {isLog
+              ? "Audit log: who added, edited, deleted or paid what, in every group."
+              : "Every expense and payment across your groups."}
+          </p>
         </div>
 
         <div className="mn-history-search">
@@ -286,6 +332,7 @@ export default function HistoryPage() {
               ["all", "All"],
               ["expenses", "Expenses"],
               ["payments", "Payments"],
+              ["activity", "Audit log"],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -323,6 +370,15 @@ export default function HistoryPage() {
           </div>
         )}
 
+        {isLog && !loading && activityError && (
+          <div className="mn-history-error" role="alert">
+            <span>{activityError}</span>
+            <button type="button" onClick={() => setReloadKey((key) => key + 1)}>
+              Try again
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <section className="mn-history-section" aria-busy="true" aria-label="Loading history">
             <div className="mn-history-label mn-skeleton-line" />
@@ -335,6 +391,92 @@ export default function HistoryPage() {
               ))}
             </div>
           </section>
+        ) : isLog ? (
+          filteredLog.length === 0 ? (
+            <section className="mn-history-empty is-filtered" aria-labelledby="log-empty-title">
+              <h2 id="log-empty-title">
+                {activity.length ? "No activity matches your filters" : "No activity yet"}
+              </h2>
+              <p>
+                {activity.length
+                  ? "Try a broader search, or reset the filters to see everything."
+                  : "When anyone adds, edits or deletes an expense, or records a payment, it's logged here."}
+              </p>
+              <div className="mn-history-empty-actions">
+                {activity.length > 0 && (
+                  <button type="button" className="mn-button-primary" onClick={() => { clearFilters(); setKind("activity"); }}>
+                    Clear all filters
+                  </button>
+                )}
+                <button type="button" className="mn-button-secondary" onClick={() => setShowAdd(true)}>
+                  Add Expense
+                </button>
+              </div>
+            </section>
+          ) : (
+            logSections.map((section) => (
+              <section key={section.key} className="mn-history-section" aria-labelledby={`l-${section.key}`}>
+                <h2 id={`l-${section.key}`} className="mn-history-label">
+                  {section.label}
+                </h2>
+                <ul className="mn-history-list">
+                  {section.items.map((item) => {
+                    const meta = ACTIVITY_META[item.action];
+                    const time = new Date(item.date).toLocaleTimeString("en-PH", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    });
+                    const body = (
+                      <>
+                        <span className="mn-history-icon" aria-hidden="true">
+                          {meta.icon}
+                        </span>
+                        <span className="mn-history-text">
+                          <strong>{item.title}</strong>
+                          <span>
+                            {item.groupName} · {new Date(item.date).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}, {time}
+                          </span>
+                          {item.detail && <small className="is-muted">{item.detail}</small>}
+                        </span>
+                        <span className="mn-history-amount">
+                          {item.amount > 0 && <strong>{peso(item.amount)}</strong>}
+                          <span
+                            className="mn-tag"
+                            style={{
+                              color: meta.color,
+                              background: `color-mix(in srgb, ${meta.color} 16%, transparent)`,
+                            }}
+                          >
+                            {meta.label}
+                          </span>
+                        </span>
+                      </>
+                    );
+                    const href =
+                      item.action === "expense_deleted"
+                        ? null
+                        : item.entityType === "expense"
+                          ? `/groups/${item.groupId}?expense=${encodeURIComponent(item.entityId)}`
+                          : `/groups/${item.groupId}`;
+                    return (
+                      <li key={item.id}>
+                        {href ? (
+                          <Link href={href} className="mn-history-row">
+                            {body}
+                            <span className="mn-history-chevron" aria-hidden="true">
+                              ›
+                            </span>
+                          </Link>
+                        ) : (
+                          <div className="mn-history-row is-static">{body}</div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))
+          )
         ) : expenses.length === 0 ? (
           <section className="mn-history-empty" aria-labelledby="history-empty-title">
             <div className="mn-history-empty-icon" aria-hidden="true">

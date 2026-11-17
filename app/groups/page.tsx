@@ -15,6 +15,7 @@ import PageHeader, { HeaderButton } from "@/components/PageHeader";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog from "@/components/LeaveGroupDialog";
 import AppNav from "@/components/AppNav";
+import { useDataVersion } from "@/lib/manemi/events";
 import {
   loadGroupsData,
   totalsFor,
@@ -80,6 +81,7 @@ export default function GroupsPage() {
   const [initialPageLoading, setInitialPageLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
   const [refreshGroups, setRefreshGroups] = useState(0);
+  const dataVersion = useDataVersion();
   const [activeFilter, setActiveFilter] = useState("All");
   const [groupMenu, setGroupMenu] = useState<string | null>(null);
   const [archiveGroupId, setArchiveGroupId] = useState<string | null>(null);
@@ -345,7 +347,7 @@ export default function GroupsPage() {
     return () => {
       active = false;
     };
-  }, [refreshGroups]);
+  }, [refreshGroups, dataVersion]);
 
   // Search runs in memory: no network calls while typing.
   const visibleGroups = useMemo(() => {

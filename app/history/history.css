@@ -343,7 +343,7 @@
 }
 
 @media (hover: hover) {
-  .mn-history-row:hover {
+  .mn-history-row:not(.is-static):hover {
     background: var(--mn-input, #25252b);
   }
   .mn-chip:not(.is-selected):hover {
@@ -497,4 +497,10 @@
   .mn-history-content {
     padding-inline: 40px;
   }
+}
+
+/* Audit log rows for deleted expenses: nothing to open. */
+.mn-history-row.is-static {
+  cursor: default;
+  padding-right: 36px; /* lines up with rows that have a chevron */
 }

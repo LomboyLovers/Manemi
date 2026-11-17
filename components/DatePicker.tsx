@@ -40,11 +40,14 @@ export default function DatePicker({ value, onChange, label, max }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // Fixed position so scrolling containers (sheets, popups) never clip it.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const selected = fromIso(value);
   const today = toIso(new Date());
   const maxDate = max ? fromIso(max) : null;
-  const isDisabled = (d: Date) => Boolean(maxDate && d > maxDate);
+  // Compare calendar days, not times ("today" at 3pm is still selectable).
+  const isDisabled = (d: Date) => Boolean(max && toIso(d) > max);
 
   // Six weeks starting on the Sunday before the 1st of the month.
   const days = useMemo(() => {
@@ -69,13 +72,35 @@ export default function DatePicker({ value, onChange, label, max }: Props) {
     close();
   }
 
+  // Place the popup under the trigger (or above when there's no room).
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.min(320, window.innerWidth - 32);
+      const height = 410;
+      const below = rect.bottom + 8;
+      const top = below + height > window.innerHeight - 8 && rect.top - 8 - height > 8 ? rect.top - 8 - height : below;
+      const left = Math.min(Math.max(16, rect.right - width), window.innerWidth - width - 16);
+      setPos({ top, left });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
   // Keep keyboard focus on the focused day.
   useEffect(() => {
     if (!open) return;
     gridRef.current
       ?.querySelector<HTMLButtonElement>(`[data-iso="${toIso(focusDate)}"]`)
-      ?.focus();
-  }, [open, focusDate]);
+      ?.focus({ preventScroll: true });
+  }, [open, focusDate, pos]);
 
   // Close on outside click.
   useEffect(() => {
@@ -137,6 +162,7 @@ export default function DatePicker({ value, onChange, label, max }: Props) {
       {open && (
         <div
           className="mn-date-popup"
+          style={pos ? { top: pos.top, left: pos.left } : { visibility: "hidden" }}
           role="dialog"
           aria-modal="false"
           aria-labelledby={titleId}

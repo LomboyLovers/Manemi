@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cleanError } from "@/lib/manemi/friends";
@@ -39,7 +40,8 @@ export default function LeaveGroupDialog({ groupId, groupName, onClose, onLeft }
     onLeft();
   }
 
-  return (
+  // Portal: page containers use CSS containment, which would trap a fixed overlay.
+  return createPortal(
     <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={close}>
       <section
         ref={ref}
@@ -71,5 +73,7 @@ export default function LeaveGroupDialog({ groupId, groupName, onClose, onLeft }
         </div>
       </section>
     </div>
+    ,
+    document.body,
   );
 }

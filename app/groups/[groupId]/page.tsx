@@ -9,6 +9,8 @@ import GroupDetailsSkeleton from "@/components/GroupDetailsSkeleton";
 import AppNav from "@/components/AppNav";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog from "@/components/LeaveGroupDialog";
+import SettleUpSheet from "@/components/SettleUpSheet";
+import { useDataVersion } from "@/lib/manemi/events";
 import { CATEGORY_META, categoryKey, isZero, peso } from "@/lib/manemi/format";
 import { buildLedger, paymentEntry, sharesFromSplitRows } from "@/lib/manemi/ledger";
 
@@ -58,6 +60,9 @@ export default function GroupDetailsPage() {
   const [error, setError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  // null = closed, "" = open on the list, userId = open on that person
+  const [settleWith, setSettleWith] = useState<string | null>(null);
+  const dataVersion = useDataVersion();
   const [activeCategory, setActiveCategory] = useState("All");
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -257,7 +262,7 @@ export default function GroupDetailsPage() {
     return () => {
       active = false;
     };
-  }, [params.groupId, refreshExpenses]);
+  }, [params.groupId, refreshExpenses, dataVersion]);
 
   const canInvite =
     Boolean(group) && !group?.isArchived && (myRole === "owner" || myRole === "admin");
@@ -429,6 +434,12 @@ export default function GroupDetailsPage() {
   const memberName = (id: string) =>
     members.find((member) => member.userId === id)?.name || "Unknown member";
 
+  // People you owe in this group, largest first (for Settle Debts).
+  const myDebts = (myBalance?.counterparties ?? [])
+    .filter((item) => item.cents < 0)
+    .map((item) => ({ userId: item.userId, name: memberName(item.userId), cents: -item.cents }));
+  const canAct = Boolean(group) && !group?.isArchived;
+
   const splitBetween = (expenseId: string) => {
     const participantIds = [
       ...new Set(
@@ -534,6 +545,21 @@ export default function GroupDetailsPage() {
           </div>
         </header>
 
+        {settleWith !== null && group && (
+          <SettleUpSheet
+            groupId={group.groupId}
+            groupName={group.name}
+            debts={myDebts}
+            initialReceiverId={settleWith || undefined}
+            onClose={() => setSettleWith(null)}
+            onRecorded={(message) => {
+              setSettleWith(null);
+              setExpenseNotice(message);
+              setActiveTab("balances");
+            }}
+          />
+        )}
+
         {leaveOpen && group && (
           <LeaveGroupDialog
             groupId={group.groupId}
@@ -621,6 +647,22 @@ export default function GroupDetailsPage() {
                     </div>
                   );
                 })()}
+
+                {canAct && (
+                  <div className="md-actions">
+                    <button type="button" className="md-action-primary" onClick={openAddExpense}>
+                      <span aria-hidden="true">＋</span> Add Expense
+                    </button>
+                    <button
+                      type="button"
+                      className="md-action-secondary"
+                      onClick={() => setSettleWith("")}
+                      disabled={myNet === null}
+                    >
+                      <span aria-hidden="true">⇄</span> Settle Debts
+                    </button>
+                  </div>
+                )}
               </section>
 
               {transactionCount === 0 ? (
@@ -708,6 +750,16 @@ export default function GroupDetailsPage() {
                                     <strong className="md-balance-amount">
                                       {formatPeso(Math.abs(item.cents) / 100)}
                                     </strong>
+                                    {!owesYou && canAct && (
+                                      <button
+                                        type="button"
+                                        className="md-balance-pay"
+                                        aria-label={`Settle up with ${name}`}
+                                        onClick={() => setSettleWith(item.userId)}
+                                      >
+                                        Settle
+                                      </button>
+                                    )}
                                   </div>
                                 );
                               })

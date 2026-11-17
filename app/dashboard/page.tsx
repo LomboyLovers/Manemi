@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import HomeSkeleton from "@/components/HomeSkeleton";
 import PageHeader from "@/components/PageHeader";
 import AppNav from "@/components/AppNav";
+import { useDataVersion } from "@/lib/manemi/events";
 import {
   loadGroupsData,
   totalsFor,
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
+  const dataVersion = useDataVersion();
 
   useEffect(() => {
     let active = true;
@@ -48,7 +50,7 @@ export default function Dashboard() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [dataVersion]);
 
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();

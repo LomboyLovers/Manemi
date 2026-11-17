@@ -1,0 +1,253 @@
+/* Settle Debts: list of people you owe + record-a-payment form. */
+.mn-settle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  font-family: var(--font-inter, Inter), Inter, Arial, Helvetica, sans-serif;
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-settle-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mn-settle-who strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.mn-settle-who span:not(.mn-settle-avatar) {
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 14px;
+}
+.mn-settle-avatar {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mn-input, #25252b);
+  color: var(--mn-text, #f5f5f7);
+  font-weight: 700;
+}
+.mn-settle-field {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.mn-settle-field > label,
+.mn-settle-field > legend,
+.mn-settle-date > span {
+  padding: 0;
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 14px;
+  font-weight: 600;
+}
+.mn-settle-amount {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 0 8px 0 16px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 14px;
+  background: var(--mn-input, #25252b);
+}
+.mn-settle-amount:focus-within {
+  border-color: var(--mn-accent, #8b3dff);
+}
+.mn-settle-amount.has-error {
+  border-color: var(--mn-negative, #ff6b6b);
+}
+.mn-settle-amount > span {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--mn-secondary, #b4b4be);
+}
+.mn-settle-amount input {
+  flex: 1;
+  width: 0; /* let flex size it; the default input width overflowed */
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--mn-text, #f5f5f7);
+  font: inherit;
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mn-settle-full {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--mn-accent-light, #c4a1ff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-settle-error {
+  margin: 0;
+  color: var(--mn-negative, #ff6b6b);
+  font-size: 14px;
+}
+.mn-settle-methods > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mn-settle-methods label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 999px;
+  background: var(--mn-input, #25252b);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.mn-settle-methods label.is-selected {
+  border-color: var(--mn-accent, #8b3dff);
+  background: color-mix(in srgb, var(--mn-accent, #8b3dff) 20%, var(--mn-surface, #1c1c21));
+  color: var(--mn-accent-light, #c4a1ff);
+  font-weight: 600;
+}
+.mn-settle-methods input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.mn-settle-methods label:has(input:focus-visible) {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+.mn-settle-date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mn-settle-actions {
+  display: flex;
+  gap: 12px;
+}
+.mn-settle-cancel,
+.mn-settle-submit {
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-settle-cancel {
+  background: var(--mn-input, #25252b);
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-settle-submit {
+  flex: 1;
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  color: #fff;
+}
+.mn-settle-cancel:disabled,
+.mn-settle-submit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.mn-settle-note {
+  margin: -6px 0 0;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Sheet: list step */
+.mn-settle-sheet {
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-settle-sheet .mn-popup-done:first-child,
+.mn-settle-back {
+  justify-self: start;
+}
+.mn-settle-intro {
+  margin: 0 0 10px;
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 15px;
+}
+.mn-settle-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.mn-settle-list li + li {
+  border-top: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-settle-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--mn-text, #f5f5f7);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mn-settle-list-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mn-settle-list strong {
+  color: var(--mn-negative, #ff6b6b);
+  font-variant-numeric: tabular-nums;
+}
+.mn-settle-chevron {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 22px;
+}
+.mn-settle-empty {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 12px 0 4px;
+  text-align: center;
+}
+.mn-settle-empty p {
+  margin: 0 0 8px;
+  color: var(--mn-secondary, #b4b4be);
+}
+.mn-settle-full:focus-visible,
+.mn-settle-cancel:focus-visible,
+.mn-settle-submit:focus-visible,
+.mn-settle-list button:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .mn-settle-list button:hover {
+    background: var(--mn-input, #25252b);
+  }
+}

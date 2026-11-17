@@ -22,6 +22,7 @@ export function useModalFocus<T extends HTMLElement>(onClose: () => void, active
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (event.defaultPrevented) return; // an inner popup (e.g. calendar) handled it
         event.preventDefault();
         onClose();
         return;

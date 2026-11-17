@@ -518,3 +518,9 @@
   88% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* Record-payment form inside the quick actions popup */
+.mn-quick-pay {
+  padding: 4px 20px 20px;
+  overflow-y: auto;
+}

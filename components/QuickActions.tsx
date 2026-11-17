@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { loadGroupsData, type GroupSummary } from "@/lib/manemi/groups";
 import { peso } from "@/lib/manemi/format";
 import { useModalFocus } from "./useModalFocus";
+import SettleUpForm from "./SettleUpForm";
 import "./popups.css";
 
-export type QuickStep = "menu" | "add-type" | "add-group" | "settle" | "request";
+export type QuickStep = "menu" | "add-type" | "add-group" | "settle" | "pay" | "request";
 
 type Props = {
   onClose: () => void;
@@ -17,7 +18,7 @@ type Props = {
   initialStep?: QuickStep;
 };
 
-type Debt = { key: string; name: string; amount: number; groupId: string; groupName: string };
+type Debt = { key: string; userId: string; name: string; amount: number; groupId: string; groupName: string };
 
 const Icon = {
   plus: <path d="M12 5v14M5 12h14" />,
@@ -56,12 +57,13 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
   const [loaded, setLoaded] = useState<GroupSummary[] | null>(given ?? null);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
+  const [payTarget, setPayTarget] = useState<Debt | null>(null);
   const ref = useModalFocus<HTMLElement>(onClose);
   const groups = given ?? loaded;
 
   // Pages without group data (e.g. a group's page) load it when needed.
   useEffect(() => {
-    if (given || loaded || step === "menu" || step === "add-type") return;
+    if (given || loaded || step === "menu" || step === "add-type" || step === "pay") return;
     let active = true;
     loadGroupsData(createClient())
       .then((result) => active && setLoaded(result?.groups ?? []))
@@ -84,6 +86,7 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
           .filter((person) => Math.sign(person.amount) === sign)
           .map((person) => ({
             key: `${group.id}-${person.userId}`,
+            userId: person.userId,
             name: person.name,
             amount: Math.abs(person.amount),
             groupId: group.id,
@@ -112,12 +115,14 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
     "add-type": "Add Expense",
     "add-group": "Choose a group",
     settle: "Settle Debts",
+    pay: "Record payment",
     request: "Request Payment",
   };
   const back: Partial<Record<QuickStep, QuickStep>> = {
     "add-type": "menu",
     "add-group": "add-type",
     settle: "menu",
+    pay: "settle",
     request: "menu",
   };
 
@@ -204,6 +209,25 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
             </div>
           ))}
 
+        {step === "pay" && payTarget && (
+          <div className="mn-quick-pay">
+            <SettleUpForm
+              groupId={payTarget.groupId}
+              groupName={payTarget.groupName}
+              receiverId={payTarget.userId}
+              receiverName={payTarget.name}
+              owedCents={Math.round(payTarget.amount * 100)}
+              onCancel={() => setStep("settle")}
+              onDone={(message) => {
+                setNotice(message);
+                setPayTarget(null);
+                if (!given) setLoaded(null); // reload our own copy
+                setStep("settle");
+              }}
+            />
+          </div>
+        )}
+
         {(step === "settle" || step === "request") &&
           (loading ? (
             <p className="mn-quick-state" aria-busy="true">Loading balances…</p>
@@ -217,14 +241,17 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
                   <div className="mn-quick-state">
                     <strong>{step === "settle" ? "You don't owe anyone" : "Nobody owes you"}</strong>
                     <p>{step === "settle" ? "You're all square. Nice." : "When someone owes you, you can remind them here."}</p>
+                    {notice && (
+                      <p className="mn-quick-notice" role="status">
+                        {notice}
+                      </p>
+                    )}
                   </div>
                 );
               return (
                 <>
                   {step === "settle" && (
-                    <p className="mn-quick-note">
-                      Recording payments isn&apos;t available yet. Here&apos;s who you owe — open a group to see details.
-                    </p>
+                    <p className="mn-quick-note">Choose who you paid back to record the payment.</p>
                   )}
                   <div className="mn-quick-list mn-quick-scroll">
                     {list.map((debt) =>
@@ -236,7 +263,12 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
                           detail={debt.groupName}
                           amount={peso(debt.amount)}
                           tone="negative"
-                          onClick={() => router.push(`/groups/${debt.groupId}`)}
+                          chevron
+                          onClick={() => {
+                            setNotice("");
+                            setPayTarget(debt);
+                            setStep("pay");
+                          }}
                         />
                       ) : (
                         <QuickRow
