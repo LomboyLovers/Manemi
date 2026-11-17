@@ -1,6 +1,7 @@
 -- Tests for the friends + friends-only invitations migrations.
 -- Run against a local copy of the schema (local_schema_mirror.sql), never production:
---   psql -v ON_ERROR_STOP=1 -f local_schema_mirror.sql -f ../migrations/20261117064513_friendships.sql ../migrations/20261117064616_friends_only_group_invitations.sql -f friends_rules_test.sql
+--   psql -v ON_ERROR_STOP=1 -f local_schema_mirror.sql -f ../migrations/20261117064513_friendships.sql \
+--     -f ../migrations/20261117064616_friends_only_group_invitations.sql -f ../migrations/20261117075618_remove_group_invite_links.sql -f friends_rules_test.sql
 \set ON_ERROR_STOP 1
 set client_min_messages = warning;
 
@@ -17,8 +18,8 @@ insert into public."User" ("userId", name, email)
 select id, initcap(split_part(email, '@', 1)), email from auth.users order by lower(email);
 -- codes: ana U-00001, ben U-00002, cat U-00003, Dan U-00004, eve U-00005, fin U-00006
 
-insert into public."Group" ("groupId", "createdBy", name, "inviteCode")
-values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'Korea 2026', 'KOREACODE');
+insert into public."Group" ("groupId", "createdBy", name)
+values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'Korea 2026');
 insert into public."Group_Member" ("groupId", "userId") values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b');
 insert into public."Group" ("groupId", "createdBy", name, "isArchived")
@@ -93,8 +94,6 @@ select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
 select pg_temp.check(not public.is_group_manager('10000000-0000-0000-0000-000000000001'), 'plain member is not a manager');
 select pg_temp.fails($$select * from public.invite_friends_to_group('10000000-0000-0000-0000-000000000001', array['00000000-0000-0000-0000-00000000000f']::uuid[])$$,
   'owner or an admin', 'plain members cannot invite, even their friends');
-select pg_temp.fails($$select * from public.invite_users_to_group('10000000-0000-0000-0000-000000000001', array['00000000-0000-0000-0000-00000000000c']::uuid[])$$,
-  'permission denied', 'old invite_users_to_group is closed');
 select pg_temp.fails($$insert into public."Group_Invitation" ("groupId","invitedEmail","invitedBy") values ('10000000-0000-0000-0000-000000000001','cat@example.com','00000000-0000-0000-0000-00000000000b')$$,
   'row-level security', 'cannot insert invitations directly');
 
@@ -141,25 +140,30 @@ select pg_temp.check((public.respond_group_invitation((select "invitationId" fro
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
 select pg_temp.fails($$select public.respond_group_invitation(gen_random_uuid(), true)$$, 'NOT_FOUND', 'unknown invitation rejected');
 select pg_temp.fails($$select public.remove_friendship((select "friendshipId" from public."Friendship" limit 1))$$, 'NOT_FOUND', 'cannot remove other people''s friendships');
-select pg_temp.fails($$select public.join_group_by_code('00000000-0000-0000-0000-00000000000c', 'KOREACODE')$$, 'permission denied', 'clients cannot call join_group_by_code');
-select pg_temp.fails($$select public.join_group_with_code('KOREACODE')$$, 'permission denied', 'old join_group_with_code is closed');
 reset role;
 
--- ============ invite-code path (as the join-group edge function: service role) ============
+-- Invite links/codes are gone: the functions no longer exist and codes were cleared.
+select pg_temp.check(to_regprocedure('public.join_group_by_code(uuid, text)') is null, 'join_group_by_code removed');
+select pg_temp.check(to_regprocedure('public.join_group_with_code(character varying)') is null, 'join_group_with_code removed');
+select pg_temp.check(to_regprocedure('public.generate_group_invite_code(uuid)') is null, 'generate_group_invite_code removed');
+select pg_temp.check(to_regprocedure('public.invite_users_to_group(uuid, uuid[])') is null, 'invite_users_to_group removed');
+select pg_temp.check(public.create_group_with_admin('00000000-0000-0000-0000-00000000000a', 'No code') #>> '{group,inviteCode}' is null, 'new groups get no invite code');
+
+-- ============ old invitation rows (sent before friends existed) ============
 -- Old-style invitation from A to C (not friends), like the 13 existing rows.
 insert into public."Group_Invitation" ("groupId", "invitedUserId", "invitedEmail", "invitedBy")
 values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'cat@example.com', '00000000-0000-0000-0000-00000000000a');
-select pg_temp.fails($$select public.join_group_by_code('00000000-0000-0000-0000-00000000000c', 'koreacode')$$,
-  'friend who owns or manages', 'code + old invitation from a non-friend no longer joins');
 set role authenticated;
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
 select pg_temp.check((select count(*) from public.list_my_group_invitations()) = 0, 'old non-friend invitation is not shown in the app');
 select public.send_friend_request('U-00001');
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
 select public.respond_friend_request((select friendship_id from public.list_friends() where user_code = 'U-00003'), true);
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select pg_temp.check((select count(*) from public.list_my_group_invitations()) = 1, 'once they are friends, the invitation shows in the app');
+select pg_temp.check((public.respond_group_invitation((select invitation_id from public.list_my_group_invitations()), true)->>'accepted') = 'true', 'and accepting it joins the group');
+select pg_temp.check(public.is_group_member('10000000-0000-0000-0000-000000000001'), 'C is now a member');
 reset role;
-select pg_temp.check((public.join_group_by_code('00000000-0000-0000-0000-00000000000c', 'KOREACODE')->'member'->>'userId') = '00000000-0000-0000-0000-00000000000c',
-  'once they are friends, the code + invitation works');
 
 -- Admins can invite too (promote B, then B invites friend F).
 update public."Group_Member" set role = 'admin' where "userId" = '00000000-0000-0000-0000-00000000000b' and "groupId" = '10000000-0000-0000-0000-000000000001';

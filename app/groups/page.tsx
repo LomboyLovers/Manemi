@@ -71,7 +71,6 @@ export default function GroupsPage() {
   const [search, setSearch] = useState("");
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showJoinModal, setShowJoinModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupCategory, setGroupCategory] = useState("Travel");
   const [groups, setGroups] = useState<GroupData[]>([]);
@@ -94,7 +93,6 @@ export default function GroupsPage() {
   const [createdGroup, setCreatedGroup] = useState<{
     id: string;
     name: string;
-    code: string;
   } | null>(null);
   // Group whose Invite Friends sheet is open (owner/admin only).
   const [inviteGroup, setInviteGroup] = useState<{
@@ -102,9 +100,6 @@ export default function GroupsPage() {
     name: string;
     memberIds: string[];
   } | null>(null);
-  const [joinInput, setJoinInput] = useState("");
-  const [joinError, setJoinError] = useState("");
-  const [joining, setJoining] = useState(false);
 
   const selectedGroup = groups.find((group) => group.id === groupMenu);
   const archiveGroup = groups.find((group) => group.id === archiveGroupId);
@@ -119,61 +114,6 @@ export default function GroupsPage() {
 
   const router = useRouter();
 
-  function getInviteCode(input: string): string {
-    const value = input.trim();
-    if (!value) return "";
-    try {
-      const url = new URL(value);
-      const code =
-        url.searchParams.get("code") || url.searchParams.get("inviteCode");
-      if (code) return code.trim();
-      const parts = url.pathname.split("/").filter(Boolean);
-      if (parts.length === 2 && parts[0] === "join") return parts[1];
-      return "";
-    } catch {
-      if (/^(https?:\/\/|www\.|\/)/i.test(value) || /[/?#\s]/.test(value))
-        return "";
-      return value;
-    }
-  }
-
-  async function handleJoinGroup(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const inviteCode = getInviteCode(joinInput);
-    if (!inviteCode || inviteCode.length > 20 || joining) {
-      setJoinError(
-        "This link isn't complete or has expired. Ask the group admin to send a new one.",
-      );
-      return;
-    }
-    setJoining(true);
-    setJoinError("");
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase.functions.invoke("join-group", {
-        body: { inviteCode },
-      });
-      if (error || data?.error) {
-        let message = data?.error || error?.message || "Unable to join group.";
-        if (error && "context" in error && error.context instanceof Response) {
-          const response = await error.context.json().catch(() => null);
-          if (response?.error) message = response.error;
-        }
-        throw new Error(message);
-      }
-      setShowJoinModal(false);
-      setJoinInput("");
-      setRefreshGroups((previous) => previous + 1);
-      const groupId = data?.group?.groupId;
-      if (typeof groupId === "string") router.push(`/groups/${groupId}`);
-    } catch (error) {
-      setJoinError(
-        error instanceof Error ? error.message : "Unable to join group.",
-      );
-    } finally {
-      setJoining(false);
-    }
-  }
 
   async function handleArchiveGroup() {
     if (
@@ -261,30 +201,27 @@ export default function GroupsPage() {
       // The Edge Function may return either { group: {...} } or the group directly.
       const resultGroup = data?.group ?? data;
       let newId: string | undefined = resultGroup?.groupId ?? resultGroup?.id;
-      let newCode: string | undefined = resultGroup?.inviteCode;
       // Fallback for create-group functions that return only a success message.
-      if (!newId || !newCode) {
+      if (!newId) {
         const {
           data: { user },
         } = await supabase.auth.getUser();
         if (user) {
           const { data: latest } = await supabase
             .from("Group")
-            .select("groupId, inviteCode")
+            .select("groupId")
             .eq("createdBy", user.id)
             .eq("name", groupName.trim())
             .order("createdAt", { ascending: false })
             .limit(1)
             .maybeSingle();
           newId = newId ?? latest?.groupId;
-          newCode = newCode ?? latest?.inviteCode;
         }
       }
       if (newId)
         setCreatedGroup({
           id: newId,
           name: groupName.trim(),
-          code: newCode ?? "",
         });
 
       setShowCreateModal(false);
@@ -308,13 +245,7 @@ export default function GroupsPage() {
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
-    const code = query.get("code");
-    if (code || query.get("join")) {
-      // From an invite link, or Home's "Join with Invite Link".
-      setJoinInput(code ?? "");
-      setJoinError("");
-      setShowJoinModal(true);
-    } else if (query.get("new") === "group") {
+    if (query.get("new") === "group") {
       // From Home's "Create Group".
       setShowCreateModal(true);
     }
@@ -386,7 +317,7 @@ export default function GroupsPage() {
               user={user}
               onNotificationsChange={() => setRefreshGroups((value) => value + 1)}
             >
-              <HeaderButton label="Join group" onClick={() => setShowJoinModal(true)}>
+              <HeaderButton label="Create group" onClick={() => setShowCreateModal(true)}>
                 <PeoplePlusIcon />
               </HeaderButton>
             </PageHeader>
@@ -543,9 +474,9 @@ export default function GroupsPage() {
             <h2>No Groups Yet</h2>
 
             <p>
-              Create a new group or join one to
+              Create a group, then invite friends to it.
               <br className="groups-mobile-break" />
-              start tracking shared expenses.
+              Invited by a friend? Accept it from the bell.
             </p>
 
             <div className="groups-action-buttons">
@@ -560,9 +491,9 @@ export default function GroupsPage() {
               <button
                 type="button"
                 className="groups-join-button"
-                onClick={() => setShowJoinModal(true)}
+                onClick={() => router.push("/friends")}
               >
-                Join Group
+                Add Friends
               </button>
             </div>
           </section>
@@ -955,87 +886,6 @@ export default function GroupsPage() {
           </div>
         )}
 
-      {/* JOIN GROUP BOTTOM SHEET */}
-      {showJoinModal && (
-        <div
-          className="manemi-invite-overlay"
-          onClick={() => !joining && setShowJoinModal(false)}
-        >
-          <section
-            className="manemi-invite-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="join-group-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="manemi-invite-handle" />
-            <header className="manemi-invite-top">
-              <button
-                type="button"
-                disabled={joining}
-                onClick={() => setShowJoinModal(false)}
-              >
-                Cancel
-              </button>
-              <h2 id="join-group-title">Join Group</h2>
-              <span />
-            </header>
-            <div className="manemi-invite-hero">
-              <div className="manemi-invite-icon"><Icon name="users" size={30} /></div>
-              <h3>Join a group</h3>
-              <p>
-                Paste the invite link or code a group admin shared with you. You
-                must sign in using the email address they invited.
-              </p>
-            </div>
-            <form onSubmit={handleJoinGroup}>
-              <label htmlFor="manemi-join-code">Invite link or code</label>
-              <div
-                className={`manemi-invite-input-row ${joinError ? "has-error" : ""}`}
-              >
-                <input
-                  id="manemi-join-code"
-                  autoComplete="off"
-                  placeholder="Paste invite link or code"
-                  value={joinInput}
-                  onChange={(event) => {
-                    setJoinInput(event.target.value);
-                    setJoinError("");
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      setJoinInput(await navigator.clipboard.readText());
-                      setJoinError("");
-                    } catch {
-                      setJoinError(
-                        "Clipboard access is unavailable. Paste the code manually.",
-                      );
-                    }
-                  }}
-                >
-                  Paste
-                </button>
-              </div>
-              {joinError && (
-                <p className="manemi-invite-error" role="alert">
-                  {joinError}
-                </p>
-              )}
-              <button
-                className="manemi-invite-primary"
-                type="submit"
-                disabled={!getInviteCode(joinInput) || joining}
-              >
-                {joining ? "Joining Group..." : "Join Group"}
-              </button>
-            </form>
-          </section>
-        </div>
-      )}
-
       {/* INVITE FRIENDS (owner/admin) */}
       {inviteGroup && (
         <InviteFriendsSheet
@@ -1153,7 +1003,7 @@ export default function GroupsPage() {
                     placeholder="Japan 2026"
                     value={groupName}
                     onChange={(event) => setGroupName(event.target.value)}
-                    maxLength={60}
+                    maxLength={50}
                     required
                   />
                 </div>
@@ -1216,7 +1066,7 @@ export default function GroupsPage() {
   );
 }
 
-/** People with a plus badge: the Join group action. */
+/** People with a plus badge: the Create group action. */
 function PeoplePlusIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

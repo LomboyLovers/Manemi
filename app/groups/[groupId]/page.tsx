@@ -509,21 +509,6 @@ export default function GroupDetailsPage() {
                       Invite Friends
                     </button>
                   )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={async () => {
-                      setMenuOpen(false);
-                      try {
-                        await navigator.clipboard.writeText(window.location.href);
-                        setExpenseNotice("Group link copied (members only)");
-                      } catch {
-                        setExpenseNotice("Unable to copy link");
-                      }
-                    }}
-                  >
-                    Copy Group Link
-                  </button>
                   {group && myRole !== "owner" && (
                     <button
                       type="button"

@@ -119,7 +119,7 @@ export default function Dashboard() {
               </svg>
             </div>
             <h2 id="home-empty-title">No groups yet</h2>
-            <p>Create a group or join one to start tracking shared expenses.</p>
+            <p>Create a group and invite your friends to start tracking shared expenses.</p>
             <div className="mn-home-empty-actions">
               <Link href="/groups?new=group" className="mn-home-empty-primary">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
@@ -127,12 +127,12 @@ export default function Dashboard() {
                 </svg>
                 Create Group
               </Link>
-              <Link href="/groups?join=1" className="mn-home-empty-secondary">
+              <Link href="/friends" className="mn-home-empty-secondary">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                   <circle cx="9" cy="8" r="4" />
                   <path d="M2 21c0-4 3.5-6 7-6s7 2 7 6M19 8v6M16 11h6" />
                 </svg>
-                Join with Invite Link
+                Add Friends
               </Link>
             </div>
             <small>Invited by a friend? Accept it from the bell at the top.</small>
