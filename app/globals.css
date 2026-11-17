@@ -3227,3 +3227,88 @@ button:disabled {
   min-height: 44px;
   padding: 0 4px;
 }
+
+/* ==========================================
+   HOME — empty state (no groups yet)
+   ========================================== */
+.mn-home-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 520px;
+  margin: 56px auto 24px;
+  text-align: center;
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-home-empty-icon {
+  width: 132px;
+  height: 132px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #3a2266 0%, #24183d 70%, #1d1530 100%);
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.mn-home-empty h2 {
+  margin: 0 0 10px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.mn-home-empty p {
+  margin: 0 0 28px;
+  max-width: 380px;
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.mn-home-empty-actions {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.mn-home-empty-primary,
+.mn-home-empty-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  border-radius: 18px;
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.mn-home-empty-primary {
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(139, 61, 255, 0.3);
+}
+.mn-home-empty-secondary {
+  border: 1.5px solid var(--mn-accent, #8b3dff);
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.mn-home-empty small {
+  margin-top: 16px;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 13px;
+}
+.mn-home-empty-primary:focus-visible,
+.mn-home-empty-secondary:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  .mn-home-empty-primary:hover {
+    filter: brightness(1.08);
+  }
+  .mn-home-empty-secondary:hover {
+    background: color-mix(in srgb, var(--mn-accent, #8b3dff) 12%, transparent);
+  }
+}
+@media (max-width: 767.98px) {
+  .mn-home-empty {
+    margin-top: 40px;
+  }
+}

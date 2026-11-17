@@ -305,11 +305,16 @@ export default function GroupsPage() {
   }
 
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("code");
-    if (code) {
-      setJoinInput(code);
+    const query = new URLSearchParams(window.location.search);
+    const code = query.get("code");
+    if (code || query.get("join")) {
+      // From an invite link, or Home's "Join with Invite Link".
+      setJoinInput(code ?? "");
       setJoinError("");
       setShowJoinModal(true);
+    } else if (query.get("new") === "group") {
+      // From Home's "Create Group".
+      setShowCreateModal(true);
     }
   }, []);
 

@@ -110,12 +110,31 @@ export default function Dashboard() {
 
 
         {!loading && groups.length === 0 && !loadError && (
-          <section className="dashboard-section">
-            <p className="dashboard-empty">
-              You&apos;re not in any groups yet.{" "}
-              <Link href="/groups">Create or join a group</Link> to start
-              splitting expenses.
-            </p>
+          <section className="mn-home-empty" aria-labelledby="home-empty-title">
+            <div className="mn-home-empty-icon" aria-hidden="true">
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 7V5.5A1.5 1.5 0 0 0 17.5 4h-12A1.5 1.5 0 0 0 4 5.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5.5A1.5 1.5 0 0 1 4 5.5" />
+                <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none" />
+              </svg>
+            </div>
+            <h2 id="home-empty-title">No groups yet</h2>
+            <p>Create a group or join one to start tracking shared expenses.</p>
+            <div className="mn-home-empty-actions">
+              <Link href="/groups?new=group" className="mn-home-empty-primary">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Create Group
+              </Link>
+              <Link href="/groups?join=1" className="mn-home-empty-secondary">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <circle cx="9" cy="8" r="4" />
+                  <path d="M2 21c0-4 3.5-6 7-6s7 2 7 6M19 8v6M16 11h6" />
+                </svg>
+                Join with Invite Link
+              </Link>
+            </div>
+            <small>Invited by a friend? Accept it from the bell at the top.</small>
           </section>
         )}
 
