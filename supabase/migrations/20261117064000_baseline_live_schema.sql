@@ -6,7 +6,7 @@
 --
 -- PRODUCTION ALREADY HAS ALL OF THIS. Never run it there. If you link the
 -- Supabase CLI to production, mark it as applied instead:
---   supabase migration repair --status applied 20261117075900
+--   supabase migration repair --status applied 20261117064000
 -- =====================================================================
 
 -- Extensions --------------------------------------------------------------

@@ -1,6 +1,6 @@
 -- Tests for the friends + friends-only invitations migrations.
 -- Run against a local copy of the schema (local_schema_mirror.sql), never production:
---   psql -v ON_ERROR_STOP=1 -f local_schema_mirror.sql -f ../migrations/*.sql -f friends_rules_test.sql
+--   psql -v ON_ERROR_STOP=1 -f local_schema_mirror.sql -f ../migrations/20261117064513_friendships.sql ../migrations/20261117064616_friends_only_group_invitations.sql -f friends_rules_test.sql
 \set ON_ERROR_STOP 1
 set client_min_messages = warning;
 
