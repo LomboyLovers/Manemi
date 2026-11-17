@@ -93,9 +93,9 @@ export default function Home() {
                 required
               />
 
-              <button type="button" className="forgot-password">
+              <Link href="/forgot-password" className="forgot-password">
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             <button type="submit" className="login-button" disabled={loading}>

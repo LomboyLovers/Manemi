@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+// Email links (sign-up confirmation, password reset) land here with ?code=.
+// `next` must be a path inside the app (never another site).
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
+  const rawNext = searchParams.get('next') ?? '/dashboard'
+  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
 
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) return NextResponse.redirect(`${origin}/dashboard`)
+    if (!error) return NextResponse.redirect(`${origin}${next}`)
   }
-  return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+  // Expired or already-used link.
+  if (next === '/reset-password') return NextResponse.redirect(`${origin}/forgot-password?expired=1`)
+  return NextResponse.redirect(`${origin}/?error=auth_failed`)
 }

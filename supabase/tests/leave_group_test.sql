@@ -54,7 +54,7 @@ select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
 select pg_temp.fails($$select public.leave_group((select id from g))$$, 'own this group', 'owner cannot leave');
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
-select pg_temp.fails($$select public.leave_group((select id from g))$$, 'still owe 1 person', 'member who owes money cannot leave');
+select pg_temp.fails($$select public.leave_group((select id from g))$$, 'still owe ₱150.00', 'member who owes money cannot leave');
 select pg_temp.fails($$select public.leave_group((select id from g), true)$$, 'still owe', 'confirming does not let a debtor leave');
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000d');
@@ -69,7 +69,7 @@ select public.create_expense_with_splits('00000000-0000-0000-0000-00000000000c',
   null, '[{"userId":"00000000-0000-0000-0000-00000000000c","amount":50},{"userId":"00000000-0000-0000-0000-00000000000b","amount":50}]');
 set role authenticated;
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
-select pg_temp.fails($$select public.leave_group((select id from g))$$, '1 person still owes you', 'someone who is owed must confirm first');
+select pg_temp.fails($$select public.leave_group((select id from g))$$, 'still owe you ₱50.00', 'someone who is owed must confirm first');
 select pg_temp.check(public.is_group_member((select id from g)), 'still a member after the refusal');
 select pg_temp.check((public.leave_group((select id from g), true)->>'leftCollectibles')::boolean, 'after confirming, they leave with collectibles');
 select pg_temp.check(not public.is_group_member((select id from g)), 'Cat left');

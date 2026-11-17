@@ -69,6 +69,8 @@ export type HistoryExpense = {
   receiverId?: string;
   receiverName?: string;
   paymentMethod?: string | null;
+  /** Expense currency (PHP when missing). */
+  currency?: string;
 };
 
 export type CurrentUser = {
@@ -95,6 +97,7 @@ type ExpenseRow = {
   totalAmount: number | string;
   category: string | null;
   expenseDate: string;
+  currency?: string | null;
 };
 
 type SettlementRow = {
@@ -220,7 +223,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     supabase.from("Group_Member").select("groupId, userId, role").in("groupId", groupIds),
     supabase
       .from("Expense")
-      .select("expenseId, groupId, paidBy_UserId, title, totalAmount, category, expenseDate")
+      .select("expenseId, groupId, paidBy_UserId, title, totalAmount, category, expenseDate, currency")
       .in("groupId", groupIds)
       .order("expenseDate", { ascending: false }),
     // Recorded settle-ups. Only completed ones count toward balances.
@@ -320,9 +323,13 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       totalCents,
       shares,
     };
-    const list = ledgerByGroup.get(row.groupId) ?? [];
-    list.push(entry);
-    ledgerByGroup.set(row.groupId, list);
+    const currency = row.currency || "PHP";
+    // Balances are in pesos; other currencies are shown but not netted in.
+    if (currency === "PHP") {
+      const list = ledgerByGroup.get(row.groupId) ?? [];
+      list.push(entry);
+      ledgerByGroup.set(row.groupId, list);
+    }
 
     const myShare = shares.find((share) => share.userId === me.id)?.cents ?? 0;
     history.push({
@@ -338,6 +345,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       payerName: nameOf(row.paidBy_UserId),
       yourShare: toPesos(myShare),
       involvesYou: myShare > 0 || row.paidBy_UserId === me.id,
+      currency,
     });
   }
   // Payments cancel the debts they pay back.
@@ -389,7 +397,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       const mine = ledger.forUser(me.id);
       const nets = [...ledger.memberNets().values()];
       const groupHistory = history.filter(
-        (item) => item.groupId === group.groupId && item.kind === "expense",
+        (item) => item.groupId === group.groupId && item.kind === "expense" && (item.currency ?? "PHP") === "PHP",
       );
 
       let spent = 0;

@@ -14,7 +14,11 @@ import CategoryIcon from "@/components/CategoryIcon";
 import Pagination from "@/components/Pagination";
 import Icon from "@/components/Icon";
 import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
-import { CATEGORY_META, categoryKey, isZero, peso } from "@/lib/manemi/format";
+import { CATEGORY_META, categoryKey, isZero, money, peso } from "@/lib/manemi/format";
+import { receiptLink } from "@/lib/manemi/functions";
+import { cleanError } from "@/lib/manemi/friends";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import PaymentsList, { type PaymentRow } from "@/components/PaymentsList";
 import { buildLedger, paymentEntry, sharesFromSplitRows } from "@/lib/manemi/ledger";
 
 type Group = {
@@ -40,6 +44,8 @@ type Expense = {
   expenseDate: string;
   category: string | null;
   receiptUrl: string | null;
+  /** PHP unless set; only PHP expenses count toward balances. */
+  currency?: string | null;
 };
 
 const formatPeso = peso;
@@ -54,9 +60,13 @@ export default function GroupDetailsPage() {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [myRole, setMyRole] = useState<"owner" | "admin" | "member">("member");
   // Completed settle-ups: they cancel the debts they pay back.
-  const [payments, setPayments] = useState<
-    Array<{ settlementId: string; payerId: string; receiverId: string; amount: number | string }>
-  >([]);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [removing, setRemoving] = useState<{ userId: string; name: string } | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptState, setReceiptState] = useState<"idle" | "loading" | "error">("idle");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [expenseSplits, setExpenseSplits] = useState<ExpenseSplit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,13 +136,13 @@ export default function GroupDetailsPage() {
           supabase
             .from("Expense")
             .select(
-              "expenseId, paidBy_UserId, title, totalAmount, expenseDate, category, receiptUrl",
+              "expenseId, paidBy_UserId, title, totalAmount, expenseDate, category, receiptUrl, currency",
             )
             .eq("groupId", params.groupId)
             .order("expenseDate", { ascending: false }),
           supabase
             .from("Settlement")
-            .select("settlementId, payerId, receiverId, amount")
+            .select("settlementId, payerId, receiverId, amount, paymentMethod, settledAt, createdAt")
             .eq("groupId", params.groupId)
             .eq("status", "completed"),
         ]);
@@ -309,7 +319,7 @@ export default function GroupDetailsPage() {
       .filter((entry) => entry.totalCents > 0);
     return buildLedger([
       ...paid,
-      ...expenses.map((expense) => {
+      ...expenses.filter((expense) => (expense.currency ?? "PHP") === "PHP").map((expense) => {
         const totalCents = Math.round(Number(expense.totalAmount) * 100) || 0;
         let shares = sharesFromSplitRows(
           totalCents,
@@ -466,6 +476,88 @@ export default function GroupDetailsPage() {
     .filter((item) => item.cents < 0)
     .map((item) => ({ userId: item.userId, name: memberName(item.userId), cents: -item.cents }));
   const canAct = Boolean(group) && !group?.isArchived;
+  const isOwner = myRole === "owner";
+  const canManage = myRole === "owner" || myRole === "admin";
+
+  // People you owe first (largest first), then people who owe you.
+  const myPeople = [...(myBalance?.counterparties ?? [])].sort(
+    (a, b) => Number(a.cents > 0) - Number(b.cents > 0) || Math.abs(b.cents) - Math.abs(a.cents),
+  );
+
+  // Your share of one expense (cents) from its split rows.
+  const splitsByExpense = useMemo(() => {
+    const map = new Map<string, ExpenseSplit[]>();
+    for (const split of expenseSplits) {
+      const list = map.get(split.expenseId) ?? [];
+      list.push(split);
+      map.set(split.expenseId, list);
+    }
+    return map;
+  }, [expenseSplits]);
+  const involvement = (expense: Expense) => {
+    const total = Math.round(Number(expense.totalAmount) * 100) || 0;
+    const shares = sharesFromSplitRows(total, splitsByExpense.get(expense.expenseId) ?? []);
+    const mine = shares.find((share) => share.userId === currentUserId)?.cents ?? 0;
+    if (expense.paidBy_UserId === currentUserId) {
+      const collectible = total - mine;
+      return collectible > 0
+        ? { tone: "positive" as const, label: "Total collectible", cents: collectible, total }
+        : { tone: "muted" as const, label: "Only you", cents: 0, total };
+    }
+    return mine > 0
+      ? { tone: "negative" as const, label: "You owe", cents: mine, total }
+      : { tone: "muted" as const, label: "Not involved", cents: 0, total };
+  };
+
+  // Other currencies are listed separately; balances above are in pesos.
+  const otherCurrencyTotals = expenses
+    .filter((expense) => (expense.currency ?? "PHP") !== "PHP")
+    .reduce((map, expense) => {
+      const code = String(expense.currency);
+      map.set(code, (map.get(code) ?? 0) + Number(expense.totalAmount));
+      return map;
+    }, new Map<string, number>());
+
+  async function saveName() {
+    if (!group) return;
+    const name = nameDraft.trim();
+    if (!name) {
+      setRenameError("Enter a group name.");
+      return;
+    }
+    if (name === group.name) {
+      setRenaming(false);
+      return;
+    }
+    const { error: rpcError } = await createClient().rpc("rename_group", { p_group_id: group.groupId, p_name: name });
+    if (rpcError) {
+      setRenameError(cleanError(rpcError, "Couldn't rename the group."));
+      return;
+    }
+    setGroup({ ...group, name });
+    setRenaming(false);
+    setRenameError("");
+    notifyDataChanged();
+  }
+
+  // Receipt: a short-lived signed link, only for group members.
+  useEffect(() => {
+    setReceiptUrl(null);
+    setReceiptState("idle");
+    if (!selectedExpense?.receiptUrl) return;
+    let active = true;
+    setReceiptState("loading");
+    receiptLink(selectedExpense.receiptUrl)
+      .then((url) => {
+        if (!active) return;
+        setReceiptUrl(url);
+        setReceiptState(url ? "idle" : "error");
+      })
+      .catch(() => active && setReceiptState("error"));
+    return () => {
+      active = false;
+    };
+  }, [selectedExpense]);
 
   const splitBetween = (expenseId: string) => {
     const participantIds = [
@@ -537,6 +629,20 @@ export default function GroupDetailsPage() {
                       Invite Friends
                     </button>
                   )}
+                  {group && isOwner && !group.isArchived && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setNameDraft(group.name);
+                        setRenameError("");
+                        setRenaming(true);
+                      }}
+                    >
+                      Rename Group
+                    </button>
+                  )}
                   {group && myRole !== "owner" && (
                     <button
                       type="button"
@@ -576,6 +682,30 @@ export default function GroupDetailsPage() {
           />
         )}
 
+        {removing && group && (
+          <ConfirmDialog
+            title={`Remove ${removing.name} from “${group.name}”?`}
+            confirmLabel="Remove member"
+            destructive
+            onClose={() => setRemoving(null)}
+            onConfirm={async () => {
+              const { error: rpcError } = await createClient().rpc("remove_group_member", {
+                p_group_id: group.groupId,
+                p_user_id: removing.userId,
+              });
+              if (rpcError) throw new Error(cleanError(rpcError, "Couldn't remove them."));
+              setExpenseNotice(`Removed ${removing.name} from the group.`);
+              setRemoving(null);
+              notifyDataChanged();
+            }}
+          >
+            <p>
+              They&apos;ll lose access to this group. Expenses and payments they were part of stay in the
+              history. You can invite them again later.
+            </p>
+          </ConfirmDialog>
+        )}
+
         {leaveOpen && group && (
           <LeaveGroupDialog
             groupId={group.groupId}
@@ -611,8 +741,50 @@ export default function GroupDetailsPage() {
                   <Icon name="users" size={28} />
                 </div>
 
-                <div>
-                  <h1>{group.name}</h1>
+                <div className="md-heading-text">
+                  {renaming ? (
+                    <form
+                      className="md-rename"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveName();
+                      }}
+                    >
+                      <label htmlFor="md-rename-input" className="mn-visually-hidden">
+                        Group name
+                      </label>
+                      <input
+                        id="md-rename-input"
+                        autoFocus
+                        maxLength={50}
+                        value={nameDraft}
+                        aria-invalid={Boolean(renameError)}
+                        aria-describedby={renameError ? "md-rename-error" : "md-rename-hint"}
+                        onChange={(event) => {
+                          setNameDraft(event.target.value);
+                          setRenameError("");
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            setRenaming(false);
+                            setRenameError("");
+                          }
+                        }}
+                        onBlur={() => void saveName()}
+                      />
+                      <span id="md-rename-hint" className="mn-visually-hidden">
+                        Enter saves, Escape cancels
+                      </span>
+                    </form>
+                  ) : (
+                    <h1>{group.name}</h1>
+                  )}
+                  {renameError && (
+                    <p id="md-rename-error" className="md-rename-error" role="alert">
+                      {renameError}
+                    </p>
+                  )}
                   <p>
                     {memberCount} member
                     {memberCount !== 1 ? "s" : ""} ·{" "}
@@ -672,6 +844,32 @@ export default function GroupDetailsPage() {
                     </div>
                   );
                 })()}
+
+                {myPeople.length > 0 && (
+                  <ul className="md-people" aria-label="Who you owe and who owes you">
+                    {myPeople.map((item) => {
+                      const name = memberName(item.userId);
+                      const owesYou = item.cents > 0;
+                      return (
+                        <li key={item.userId} className={owesYou ? "is-positive" : "is-negative"}>
+                          <span className="md-people-avatar" aria-hidden="true">
+                            {name.charAt(0).toUpperCase()}
+                          </span>
+                          <span className="md-people-name">{owesYou ? `${name} owes you` : `You owe ${name}`}</span>
+                          <strong>{formatPeso(Math.abs(item.cents) / 100)}</strong>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {otherCurrencyTotals.size > 0 && (
+                  <p className="md-other-currency">
+                    Also spent{" "}
+                    {[...otherCurrencyTotals].map(([code, amount]) => money(amount, code)).join(" + ")}{" "}
+                    in other currencies (not included in peso balances).
+                  </p>
+                )}
 
                 {canAct && (
                   <div className="md-actions">
@@ -826,10 +1024,73 @@ export default function GroupDetailsPage() {
                                     <strong className="md-balance-amount">
                                       {formatPeso(Math.abs(member.net))}
                                     </strong>
+                                    {isOwner && canAct && !isMe && isZero(member.net) && (
+                                      <button
+                                        type="button"
+                                        className="md-balance-remove"
+                                        aria-label={`Remove ${label} from the group`}
+                                        onClick={() => setRemoving({ userId: member.userId, name: label })}
+                                      >
+                                        Remove
+                                      </button>
+                                    )}
                                   </div>
                                 );
                               })}
                           </div>
+                          {isOwner && canAct && members.length > 1 && (
+                            <p className="md-balances-note">Only members who are settled up can be removed.</p>
+                          )}
+
+                          <h2 className="md-balances-heading">Settle-up plan</h2>
+                          <p className="md-balances-note">
+                            The fewest payments that settle everyone in this group.
+                          </p>
+                          <div className="md-balances">
+                            {ledger.plan().length ? (
+                              ledger.plan().map((transfer) => {
+                                const mine = transfer.from === currentUserId;
+                                const toMe = transfer.to === currentUserId;
+                                return (
+                                  <div
+                                    key={`${transfer.from}-${transfer.to}`}
+                                    className={`md-balance-row ${mine ? "md-balance-negative" : toMe ? "md-balance-positive" : "md-balance-zero"}`}
+                                  >
+                                    <span className="md-balance-avatar" aria-hidden="true">
+                                      {(mine ? "You" : memberName(transfer.from)).charAt(0).toUpperCase()}
+                                    </span>
+                                    <div className="md-balance-name">
+                                      <strong>
+                                        {mine ? "You" : memberName(transfer.from)} pay{mine ? "" : "s"}{" "}
+                                        {toMe ? "you" : memberName(transfer.to)}
+                                      </strong>
+                                    </div>
+                                    <strong className="md-balance-amount">{formatPeso(transfer.cents / 100)}</strong>
+                                    {mine && canAct && (
+                                      <button
+                                        type="button"
+                                        className="md-balance-pay"
+                                        aria-label={`Record paying ${memberName(transfer.to)}`}
+                                        onClick={() => setSettleWith(transfer.to)}
+                                      >
+                                        Settle
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p className="md-balances-empty">Everyone is settled up.</p>
+                            )}
+                          </div>
+
+                          <h2 className="md-balances-heading">Payments</h2>
+                          <PaymentsList
+                            payments={payments}
+                            me={currentUserId ?? ""}
+                            canManageAll={canManage}
+                            nameOf={memberName}
+                          />
                         </>
                       )}
                     </div>
@@ -885,6 +1146,19 @@ export default function GroupDetailsPage() {
 
                           <div className="md-transaction-info">
                             <h3>{expense.title}</h3>
+                            {(() => {
+                              const who = involvement(expense);
+                              return who.cents > 0 ? (
+                                <p className={`md-involve is-${who.tone}`}>
+                                  <b>
+                                    {who.label}: {money(who.cents / 100, expense.currency)}
+                                  </b>{" "}
+                                  <span>of {money(who.total / 100, expense.currency)}</span>
+                                </p>
+                              ) : (
+                                <p className="md-involve is-muted">{who.label}</p>
+                              );
+                            })()}
                             <p>
                               Paid by{" "}
                               {expense.paidBy_UserId === currentUserId
@@ -905,7 +1179,7 @@ export default function GroupDetailsPage() {
 
                           <div className="md-transaction-amount">
                             <strong>
-                              {formatPeso(Number(expense.totalAmount))}
+                              {money(Number(expense.totalAmount), expense.currency)}
                             </strong>
                             <span
                               className="md-category-tag"
@@ -1023,7 +1297,7 @@ export default function GroupDetailsPage() {
                   <div>
                     <span>Expense amount</span>
                     <strong>
-                      {formatPeso(Number(selectedExpense.totalAmount))}
+                      {money(Number(selectedExpense.totalAmount), selectedExpense.currency)}
                     </strong>
                   </div>
                   <span className="md-sheet-category">
@@ -1050,13 +1324,46 @@ export default function GroupDetailsPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="md-sheet-delete-button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                >
-                  Delete Expense
-                </button>
+                {selectedExpense.receiptUrl && (
+                  <div className="md-sheet-receipt">
+                    <span>Receipt</span>
+                    {receiptState === "loading" ? (
+                      <p aria-busy="true">Loading receipt…</p>
+                    ) : receiptState === "error" || !receiptUrl ? (
+                      <p role="alert">Couldn&apos;t load the receipt. Try again later.</p>
+                    ) : (
+                      <a href={receiptUrl} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={receiptUrl} alt={`Receipt for ${selectedExpense.title}`} />
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {canAct && (selectedExpense.paidBy_UserId === currentUserId || canManage) ? (
+                  <div className="md-sheet-actions">
+                    <button
+                      type="button"
+                      className="md-sheet-edit-button"
+                      onClick={() =>
+                        router.push(
+                          `/groups/${params.groupId}/add-expense?edit=${encodeURIComponent(selectedExpense.expenseId)}`,
+                        )
+                      }
+                    >
+                      Edit Expense
+                    </button>
+                    <button
+                      type="button"
+                      className="md-sheet-delete-button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      Delete Expense
+                    </button>
+                  </div>
+                ) : (
+                  <p className="md-sheet-note">Only the payer or a group admin can edit or delete this expense.</p>
+                )}
               </>
             )}
           </section>

@@ -22,9 +22,13 @@ import Select from "@/components/Select";
 import CategoryIcon from "@/components/CategoryIcon";
 import { notifyDataChanged } from "@/lib/manemi/events";
 import Icon from "@/components/Icon";
-import type { CategoryKey } from "@/lib/manemi/format";
+import { CURRENCIES, categoryKey, money as formatMoney, type CategoryKey } from "@/lib/manemi/format";
+import { callFunction } from "@/lib/manemi/functions";
 
 import "./add-expense.css";
+
+/** create-expense / update-expense responses (shape varies by version). */
+type SaveResponse = { expense?: { expenseId?: string }; expenseId?: string; data?: { expense?: { expenseId?: string } } };
 
 type Group = { groupId: string; name: string; createdBy: string };
 
@@ -50,10 +54,8 @@ const categories: { name: Category; key: CategoryKey }[] = [
   { name: "Other", key: "other" },
 ];
 
-const money = (cents: number) =>
-  new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(
-    cents / 100,
-  );
+const RECEIPT_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const RECEIPT_MAX = 5 * 1024 * 1024;
 
 const parseCents = toCents;
 
@@ -97,6 +99,17 @@ export default function AddExpensePage() {
   const [selected, setSelected] = useState<string[]>([]);
 
   const [entries, setEntries] = useState<Record<string, string>>({});
+
+  // ?edit=<expenseId> opens an existing expense (EXP-09).
+  const [editId] = useState(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("edit") ?? "",
+  );
+  const [currency, setCurrency] = useState("PHP");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptError, setReceiptError] = useState("");
+  const [existingReceipt, setExistingReceipt] = useState<string | null>(null);
+  const money = (cents: number) => formatMoney(cents / 100, currency);
+  const symbol = CURRENCIES.find((item) => item.code === currency)?.symbol ?? "₱";
 
   useEffect(() => {
     let alive = true;
@@ -200,6 +213,51 @@ export default function AddExpensePage() {
       setMembers(groupMembers);
       setSelected(memberIds);
       setPayerId(auth.user.id);
+
+      if (editId) {
+        const [expenseResult, splitResult] = await Promise.all([
+          supabase
+            .from("Expense")
+            .select("expenseId, groupId, title, totalAmount, expenseDate, category, currency, paidBy_UserId, receiptUrl")
+            .eq("expenseId", editId)
+            .maybeSingle(),
+          supabase.from("Expense_Split").select("userId, amountOwed, percentage").eq("expenseId", editId),
+        ]);
+        if (!alive) return;
+        const expense = expenseResult.data;
+        if (!expense || expense.groupId !== params.groupId) {
+          setError("That expense wasn't found in this group.");
+          setLoading(false);
+          return;
+        }
+        const totalCents = Math.round(Number(expense.totalAmount) * 100);
+        setAmount((totalCents / 100).toFixed(2));
+        setTitle(String(expense.title ?? ""));
+        setPayerId(String(expense.paidBy_UserId));
+        const when = new Date(expense.expenseDate);
+        setDate(`${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, "0")}-${String(when.getDate()).padStart(2, "0")}`);
+        const key = categoryKey(expense.category);
+        setCategory((categories.find((item) => item.key === key)?.name ?? "Other") as Category);
+        setCurrency(String(expense.currency ?? "PHP"));
+        setExistingReceipt((expense.receiptUrl as string | null) ?? null);
+
+        const rows = (splitResult.data ?? []) as Array<{ userId: string; amountOwed: number | string | null; percentage: number | string | null }>;
+        if (rows.length) {
+          const ids = rows.map((row) => row.userId);
+          setSelected(ids);
+          const cents = rows.map((row) => Math.round(Number(row.amountOwed ?? 0) * 100));
+          if (rows.every((row) => row.percentage !== null && row.percentage !== undefined)) {
+            setMode("percent");
+            setEntries(Object.fromEntries(rows.map((row) => [row.userId, String(Number(row.percentage))])));
+          } else if (Math.max(...cents) - Math.min(...cents) <= 1) {
+            setMode("equally");
+            setEntries({});
+          } else {
+            setMode("exact");
+            setEntries(Object.fromEntries(rows.map((row, index) => [row.userId, (cents[index] / 100).toFixed(2)])));
+          }
+        }
+      }
       setLoading(false);
     }
 
@@ -208,7 +266,7 @@ export default function AddExpensePage() {
     return () => {
       alive = false;
     };
-  }, [params.groupId]);
+  }, [params.groupId, editId]);
 
   const total = parseCents(amount);
 
@@ -361,56 +419,45 @@ export default function AddExpensePage() {
         participants,
       };
 
-      const { data, error: functionError } = await supabase.functions.invoke(
-        "create-expense",
+      const data = editId
+        ? await callFunction<SaveResponse>(
+            "update-expense",
+            { ...payload, groupId: undefined, expenseId: editId, currency, receiptUrl: existingReceipt },
+            "PUT",
+          )
+        : await callFunction<SaveResponse>(
+            "create-expense",
+            { ...payload, currency },
+          );
 
-        {
-          body: payload,
-        },
-      );
+      const savedId = editId || data?.expense?.expenseId || data?.data?.expense?.expenseId || data?.expenseId || "";
 
-      if (functionError) {
-        let message = functionError.message;
-
-        const response = (
-          functionError as {
-            context?: Response;
-          }
-        ).context;
-
-        if (response) {
-          try {
-            const details = await response.clone().json();
-
-            message =
-              details.error || JSON.stringify(details.details || details);
-          } catch {
-            // Keep the original error message.
-          }
+      // EXP-08: the receipt is uploaded after the expense exists.
+      if (receiptFile && savedId) {
+        const form = new FormData();
+        form.append("expenseId", savedId);
+        form.append("file", receiptFile);
+        try {
+          await callFunction("upload-receipt", form);
+        } catch (uploadError) {
+          throw new Error(
+            `The expense was saved, but the receipt didn't upload: ${uploadError instanceof Error ? uploadError.message : "try again"}. Open the expense and edit it to attach the receipt again.`,
+          );
         }
-
-        throw new Error(message);
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
       }
 
       // Only announce success after the Edge Function confirms creation.
 
       // The returned ID lets Group Details locate the exact saved expense.
 
-      const createdExpenseId =
-        data?.expense?.expenseId ??
-        data?.data?.expense?.expenseId ??
-        data?.expenseId ??
-        null;
+      const createdExpenseId = editId ? null : savedId || null;
 
       const destination = new URLSearchParams();
 
       if (typeof createdExpenseId === "string" && createdExpenseId) {
         destination.set("expenseAdded", createdExpenseId);
       }
+      if (editId) destination.set("expense", editId);
 
       notifyDataChanged(); // Home/Groups/History must not show cached totals
       router.replace(
@@ -449,7 +496,7 @@ export default function AddExpensePage() {
             Cancel
           </button>
 
-          <h1>Add Expense</h1>
+          <h1>{editId ? "Edit Expense" : "Add Expense"}</h1>
 
           <span aria-hidden="true" />
         </header>
@@ -467,7 +514,7 @@ export default function AddExpensePage() {
                 <label htmlFor="ae-amount">Amount</label>
 
                 <div className="ae-amount-input">
-                  <span>₱</span>
+                  <span aria-hidden="true">{symbol}</span>
 
                   <input
                     id="ae-amount"
@@ -482,6 +529,22 @@ export default function AddExpensePage() {
                     style={{ width: `${Math.max((amount || "0.00").length, 1) + 0.6}ch` }}
                   />
                 </div>
+              </div>
+
+              <div className="ae-currency">
+                <Select
+                  id="ae-currency"
+                  label="Currency"
+                  variant="chip"
+                  align="start"
+                  value={currency}
+                  onChange={setCurrency}
+                  options={CURRENCIES.map((item) => ({
+                    value: item.code,
+                    label: `${item.code} · ${item.label}`,
+                    hint: item.code === "PHP" ? "Counts toward group balances" : "Shown separately from peso balances",
+                  }))}
+                />
               </div>
 
               <label className="ae-visually-hidden" htmlFor="ae-title">
@@ -532,6 +595,50 @@ export default function AddExpensePage() {
 
                   <DatePicker label="Date" value={date} onChange={setDate} />
                 </div>
+
+                <div className="ae-info-row ae-receipt-row">
+                  <span>Receipt</span>
+                  <div className="ae-receipt">
+                    {receiptFile ? (
+                      <>
+                        <span className="ae-receipt-name">{receiptFile.name}</span>
+                        <button type="button" onClick={() => setReceiptFile(null)}>
+                          Remove
+                        </button>
+                      </>
+                    ) : existingReceipt ? (
+                      <span className="ae-receipt-name">Receipt attached</span>
+                    ) : null}
+                    <label className="ae-receipt-pick">
+                      <input
+                        type="file"
+                        accept={RECEIPT_TYPES.join(",")}
+                        className="ae-visually-hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          event.target.value = "";
+                          if (!file) return;
+                          if (!RECEIPT_TYPES.includes(file.type)) {
+                            setReceiptError("Use a JPG, PNG or WebP photo.");
+                            return;
+                          }
+                          if (file.size > RECEIPT_MAX) {
+                            setReceiptError("That photo is over 5 MB. Choose a smaller one.");
+                            return;
+                          }
+                          setReceiptError("");
+                          setReceiptFile(file);
+                        }}
+                      />
+                      {receiptFile || existingReceipt ? "Replace" : "Attach photo"}
+                    </label>
+                  </div>
+                </div>
+                {receiptError && (
+                  <p className="ae-receipt-error" role="alert">
+                    {receiptError}
+                  </p>
+                )}
               </div>
 
               <div className="ae-section-label">
@@ -726,7 +833,7 @@ export default function AddExpensePage() {
                   disabled={!formValid || saving}
                   onClick={handleSaveExpense}
                 >
-                  {saving ? "Saving Expense..." : "Save Expense"}
+                  {saving ? "Saving..." : editId ? "Save Changes" : "Save Expense"}
                 </button>
 
                 {saveError && (

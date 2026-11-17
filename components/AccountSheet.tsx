@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { initialOf } from "@/lib/manemi/format";
 import { invalidateGroupsData } from "@/lib/manemi/groups";
 import { invalidateCurrentUser } from "@/lib/manemi/friends";
 import { useModalFocus } from "./useModalFocus";
+import NotificationSettings from "./NotificationSettings";
 import "./popups.css";
 
 type Props = {
@@ -22,6 +23,14 @@ export default function AccountSheet({ name, email, handle, onClose }: Props) {
   const ref = useModalFocus<HTMLElement>(onClose);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
+  const [view, setView] = useState<"main" | "notifications">("main");
+  const [userId, setUserId] = useState("");
+
+  useEffect(() => {
+    void createClient()
+      .auth.getSession()
+      .then(({ data }) => setUserId(data.session?.user.id ?? ""));
+  }, []);
 
   async function logOut() {
     setSigningOut(true);
@@ -52,13 +61,23 @@ export default function AccountSheet({ name, email, handle, onClose }: Props) {
       >
         <div className="mn-popup-handle" aria-hidden="true" />
         <header className="mn-popup-sheet-header">
-          <span aria-hidden="true" />
-          <h2 id="account-title">Account</h2>
+          {view === "notifications" ? (
+            <button type="button" className="mn-popup-done mn-popup-back" onClick={() => setView("main")}>
+              ‹ Back
+            </button>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <h2 id="account-title">{view === "notifications" ? "Email notifications" : "Account"}</h2>
           <button type="button" className="mn-popup-done" onClick={onClose} data-autofocus>
             Done
           </button>
         </header>
 
+        {view === "notifications" && userId ? (
+          <NotificationSettings userId={userId} />
+        ) : (
+        <>
         <div className="mn-account-identity">
           <div className="mn-account-avatar" aria-hidden="true">
             {initialOf(name || "?")}
@@ -79,6 +98,16 @@ export default function AccountSheet({ name, email, handle, onClose }: Props) {
               <path d="m9 6 6 6-6 6" />
             </svg>
           </button>
+          <button type="button" className="mn-account-row-live" onClick={() => setView("notifications")}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 6h16v12H4z" />
+              <path d="m4 7 8 6 8-6" />
+            </svg>
+            <span>Email notifications</span>
+            <svg className="mn-account-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </button>
         </div>
 
         {error && (
@@ -93,6 +122,8 @@ export default function AccountSheet({ name, email, handle, onClose }: Props) {
           </svg>
           {signingOut ? "Logging Out…" : "Log Out"}
         </button>
+        </>
+        )}
       </section>
     </div>
   );

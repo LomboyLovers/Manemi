@@ -251,3 +251,64 @@
     background: var(--mn-input, #25252b);
   }
 }
+
+/* ---------- payments list (group page) ---------- */
+.mn-payments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 16px;
+  background: var(--mn-surface, #1c1c21);
+  overflow: hidden;
+}
+.mn-payments li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 60px;
+  padding: 10px 16px;
+}
+.mn-payments li + li {
+  border-top: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-payment-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.mn-payment-text strong {
+  font-size: 15px;
+}
+.mn-payment-text small {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+}
+.mn-payment-amount {
+  color: var(--mn-positive, #3ddc84);
+  font-variant-numeric: tabular-nums;
+}
+.mn-payment-actions {
+  display: flex;
+  gap: 6px;
+}
+.mn-payment-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mn-text, #f5f5f7);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-payment-actions button.is-danger {
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-payment-actions button:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}

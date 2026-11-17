@@ -5,6 +5,12 @@
 // 5-person group, an expense between 2 people only creates a debt between
 // those 2. Debts between the same pair net out.
 //
+// Debt simplification (SRS BAL-04): from everyone's net balance we compute
+// the settle-up plan with the fewest payments, and "who you owe / who owes
+// you" comes from that plan. Example: Ann owes Ben 100 and Ben owes Cy 100
+// becomes one payment, Ann pays Cy 100. Only people with a non-zero net are
+// in the plan, so people outside an expense are never involved.
+//
 // All amounts are integer centavos.
 
 import { apportion } from "./split.ts";
@@ -21,6 +27,33 @@ export type LedgerExpense = {
 
 /** Positive cents = they owe you; negative = you owe them. */
 export type Counterparty = { userId: string; cents: number };
+
+/** One payment in the settle-up plan. */
+export type Transfer = { from: string; to: string; cents: number };
+
+/**
+ * Fewest-payments plan for a set of net balances (positive = is owed).
+ * Greedy: the largest debtor pays the largest creditor, repeat. Produces at
+ * most n-1 payments; ties break by user id so the plan is stable.
+ */
+export function simplifyDebts(nets: Map<string, number>): Transfer[] {
+  const byAmount = (a: [string, number], b: [string, number]) =>
+    b[1] - a[1] || (a[0] < b[0] ? -1 : 1);
+  const creditors = [...nets].filter(([, v]) => v > 0).map(([id, v]) => [id, v] as [string, number]).sort(byAmount);
+  const debtors = [...nets].filter(([, v]) => v < 0).map(([id, v]) => [id, -v] as [string, number]).sort(byAmount);
+  const plan: Transfer[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const cents = Math.min(debtors[i][1], creditors[j][1]);
+    if (cents > 0) plan.push({ from: debtors[i][0], to: creditors[j][0], cents });
+    debtors[i][1] -= cents;
+    creditors[j][1] -= cents;
+    if (debtors[i][1] === 0) i++;
+    if (creditors[j][1] === 0) j++;
+  }
+  return plan;
+}
 
 export type UserBalance = {
   net: number;
@@ -73,31 +106,49 @@ export function buildLedger(expenses: LedgerExpense[]) {
     return ids;
   };
 
-  function forUser(userId: string): UserBalance {
+  /** Direct (unsimplified) balance with each person, from shared expenses only. */
+  function pairwise(userId: string): Counterparty[] {
     const counterparties: Counterparty[] = [];
     for (const other of people()) {
       if (other === userId) continue;
       const cents = owed(other, userId) - owed(userId, other);
       if (cents) counterparties.push({ userId: other, cents });
     }
-    counterparties.sort((a, b) => Math.abs(b.cents) - Math.abs(a.cents));
-    const owedToYou = counterparties
-      .filter((item) => item.cents > 0)
-      .reduce((sum, item) => sum + item.cents, 0);
-    const youOwe = counterparties
-      .filter((item) => item.cents < 0)
-      .reduce((sum, item) => sum - item.cents, 0);
-    return { net: owedToYou - youOwe, owedToYou, youOwe, counterparties };
+    return counterparties.sort((a, b) => Math.abs(b.cents) - Math.abs(a.cents));
   }
 
   /** Net per person (positive = is owed). Always sums to zero. */
+  let nets: Map<string, number> | null = null;
   function memberNets() {
-    const nets = new Map<string, number>();
-    for (const person of people()) nets.set(person, forUser(person).net);
+    if (nets) return nets;
+    nets = new Map<string, number>();
+    for (const person of people()) {
+      const net = pairwise(person).reduce((sum, item) => sum + item.cents, 0);
+      if (net) nets.set(person, net);
+    }
     return nets;
   }
 
-  return { forUser, memberNets };
+  let simplified: Transfer[] | null = null;
+  /** The group's fewest-payments settle-up plan. */
+  function plan() {
+    return (simplified ??= simplifyDebts(memberNets()));
+  }
+
+  /** Your balance, with counterparties taken from the simplified plan. */
+  function forUser(userId: string): UserBalance {
+    const counterparties: Counterparty[] = [];
+    for (const transfer of plan()) {
+      if (transfer.from === userId) counterparties.push({ userId: transfer.to, cents: -transfer.cents });
+      else if (transfer.to === userId) counterparties.push({ userId: transfer.from, cents: transfer.cents });
+    }
+    counterparties.sort((a, b) => Math.abs(b.cents) - Math.abs(a.cents));
+    const owedToYou = counterparties.filter((c) => c.cents > 0).reduce((sum, c) => sum + c.cents, 0);
+    const youOwe = counterparties.filter((c) => c.cents < 0).reduce((sum, c) => sum - c.cents, 0);
+    return { net: owedToYou - youOwe, owedToYou, youOwe, counterparties };
+  }
+
+  return { forUser, memberNets, plan, pairwise };
 }
 
 /** An Expense_Split row: amountOwed and percentage are numeric (may be null). */

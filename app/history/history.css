@@ -603,3 +603,54 @@
   opacity: 0.55;
   pointer-events: none;
 }
+
+/* Date range inside the sort & filter popover */
+.mn-history-dates {
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid var(--mn-border, #3a3a43);
+  display: grid;
+  gap: 8px;
+}
+.mn-history-dates legend {
+  padding: 0 8px;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.mn-history-dates > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
+  font-size: 14px;
+}
+.mn-history-dates .mn-date-trigger {
+  min-height: 40px;
+  font-size: 14px;
+}
+.mn-date-add,
+.mn-date-clear {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 12px;
+  background: var(--mn-input, #25252b);
+  color: var(--mn-accent-light, #c4a1ff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-date-clear {
+  justify-self: start;
+  margin-left: 8px;
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-history-popover {
+  width: 300px;
+}

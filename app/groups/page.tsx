@@ -77,7 +77,6 @@ export default function GroupsPage() {
   const [groupCategory, setGroupCategory] = useState("Travel");
   const [groups, setGroups] = useState<GroupData[]>([]);
   const [groupEmoji, setGroupEmoji] = useState<string>("plane");
-  const [groupCurrency, setGroupCurrency] = useState("PHP");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createGroupError, setCreateGroupError] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(true);
@@ -229,7 +228,6 @@ export default function GroupsPage() {
       setGroupName("");
       setGroupCategory("Travel");
       setGroupEmoji("plane");
-      setGroupCurrency("PHP");
 
       notifyDataChanged();
       if (!newId)
@@ -1069,25 +1067,9 @@ export default function GroupsPage() {
                 </div>
               </div>
 
-              <div className="new-group-currency-field">
-                <label htmlFor="new-group-currency">Currency</label>
-                <Select
-                  id="new-group-currency"
-                  label="Currency"
-                  value={groupCurrency}
-                  onChange={setGroupCurrency}
-                  options={[
-                    { value: "PHP", label: "Philippine Peso (₱)" },
-                    { value: "USD", label: "US Dollar ($)" },
-                    { value: "EUR", label: "Euro (€)" },
-                    { value: "JPY", label: "Japanese Yen (¥)" },
-                    { value: "KRW", label: "Korean Won (₩)" },
-                  ]}
-                />
-              </div>
               <p className="new-group-info">
-                <span aria-hidden="true">ⓘ</span> You'll be the group admin.
-                Invite members after creating it.
+                <span aria-hidden="true">ⓘ</span> You'll be the group owner.
+                Invite friends after creating it. Each expense picks its own currency.
               </p>
               <button
                 type="submit"
