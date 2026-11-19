@@ -353,3 +353,100 @@ label.mn-friend-row {
   align-items: center;
   gap: 6px;
 }
+
+/* ---------- Bell: activity feed ---------- */
+.mn-activity-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mn-activity-item {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--mn-border, #3a3a43);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+@media (hover: hover) {
+  .mn-activity-item:hover {
+    background: var(--mn-surface-2, #26262c);
+  }
+}
+.mn-activity-item:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: -2px;
+}
+.mn-activity-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background-color 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.mn-activity-item.is-unread .mn-activity-dot {
+  background: var(--mn-accent, #8b3dff);
+}
+.mn-activity-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.mn-activity-text {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mn-muted, #a8a8b3);
+  overflow-wrap: anywhere;
+}
+.mn-activity-text b {
+  color: var(--mn-text, #f5f5f7);
+  font-weight: 600;
+}
+.mn-activity-meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--mn-tertiary, #8a8a95);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.mn-activity-time {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--mn-tertiary, #8a8a95);
+  white-space: nowrap;
+}
+.mn-notifications-footer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.mn-notifications-footer-row .mn-notifications-footer + .mn-notifications-footer {
+  border-left: 1px solid var(--mn-border, #3a3a43);
+}
+.mn-notifications {
+  animation: mn-bell-in 160ms cubic-bezier(0.2, 0, 0, 1) both;
+  transform-origin: top right;
+}
+@keyframes mn-bell-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 767.98px) {
+  .mn-notifications {
+    position: fixed;
+    top: var(--mn-bell-top, 72px);
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-height: calc(100dvh - var(--mn-bell-top, 72px) - 96px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mn-notifications { animation: none; }
+  .mn-activity-item,
+  .mn-activity-dot { transition: none; }
+}

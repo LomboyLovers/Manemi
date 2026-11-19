@@ -1,7 +1,7 @@
 "use client";
 
-import { notifyDataChanged } from "@/lib/manemi/events";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,46 +14,110 @@ import {
   type FriendRow,
   type GroupInvitation,
 } from "@/lib/manemi/friends";
+import {
+  listActivityNotifications,
+  markNotificationsSeen,
+  timeAgo,
+  type ActivityNotification,
+} from "@/lib/manemi/notifications";
 import "./friends.css";
+
+/** Re-check for new activity this often while the tab is visible. */
+const POLL_MS = 60_000;
 
 type Props = {
   /** Called after something changes (e.g. a friend request was accepted). */
   onChange?: () => void;
 };
 
-/** Bell with a badge: group invitations and friend requests to accept or decline. */
+/**
+ * Bell with a badge: group invitations and friend requests to answer, plus
+ * activity (new/edited expenses that include you, payments to or from you).
+ */
 export default function NotificationsBell({ onChange }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [requests, setRequests] = useState<FriendRow[]>([]);
   const [invitations, setInvitations] = useState<GroupInvitation[]>([]);
+  const [activity, setActivity] = useState<ActivityNotification[]>([]);
+  const [unread, setUnread] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
+  const dataVersion = useDataVersion();
   const [error, setError] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    try {
-      const [friends, invites] = await Promise.all([
-        listFriends(supabase),
-        listMyGroupInvitations(supabase),
-      ]);
-      setRequests(friends.filter((row) => row.direction === "incoming"));
-      setInvitations(invites);
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Couldn't load notifications.");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const me = session?.user?.id;
+    if (!me) return;
+    // Each source loads on its own, so one failing never hides the others.
+    const [friends, invites, feed] = await Promise.allSettled([
+      listFriends(supabase),
+      listMyGroupInvitations(supabase),
+      listActivityNotifications(supabase, me),
+    ]);
+    if (friends.status === "fulfilled") setRequests(friends.value.filter((row) => row.direction === "incoming"));
+    if (invites.status === "fulfilled") setInvitations(invites.value);
+    if (feed.status === "fulfilled") {
+      setActivity(feed.value.items);
+      setUnread(feed.value.unread);
     }
+    const failed = [friends, invites, feed].find((result) => result.status === "rejected");
+    setError(
+      failed && failed.status === "rejected"
+        ? failed.reason instanceof Error
+          ? failed.reason.message
+          : "Couldn't load notifications."
+        : "",
+    );
   }, []);
 
+  // Load on mount, whenever data changes in the app, when the tab comes back
+  // into view, and every minute while it's visible.
   useEffect(() => {
     void load();
+  }, [load, dataVersion]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    const timer = window.setInterval(refresh, POLL_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [load]);
+
+  // On phones the panel spans the screen (16px margins), just below the bell.
+  const [panelTop, setPanelTop] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    const place = () => setPanelTop((buttonRef.current?.getBoundingClientRect().bottom ?? 0) + 10);
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, { passive: true });
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    void load();
+    // Opening the bell marks activity read (the dots stay until it closes).
+    void load().then(async () => {
+      try {
+        await markNotificationsSeen(createClient());
+        setUnread(0);
+      } catch {
+        // Stays unread; tried again next time the bell opens.
+      }
+    });
     const onPointer = (event: PointerEvent) => {
       if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -68,6 +132,8 @@ export default function NotificationsBell({ onChange }: Props) {
     return () => {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
+      // Closed: clear the "new" dots now that they've been seen.
+      setActivity((list) => (list.some((item) => item.unread) ? list.map((item) => ({ ...item, unread: false })) : list));
     };
   }, [open, load]);
 
@@ -108,7 +174,8 @@ export default function NotificationsBell({ onChange }: Props) {
     }
   }
 
-  const count = requests.length + invitations.length;
+  const count = requests.length + invitations.length + unread;
+  const empty = requests.length + invitations.length + activity.length === 0;
 
   return (
     <div className="mn-header-bell" ref={wrapRef}>
@@ -131,16 +198,22 @@ export default function NotificationsBell({ onChange }: Props) {
       </button>
 
       {open && (
-        <div className="mn-notifications" role="dialog" aria-label="Notifications">
+        <div
+          className="mn-notifications"
+          role="dialog"
+          aria-label="Notifications"
+          style={{ "--mn-bell-top": `${panelTop}px` } as CSSProperties}
+        >
           {error && (
             <p className="mn-notifications-empty mn-friends-error" role="alert">
               {error}
             </p>
           )}
 
-          {count === 0 && !error && (
+          {empty && !error && (
             <p className="mn-notifications-empty">
-              No new notifications. Friend requests and group invitations show up here.
+              No notifications yet. New expenses that include you, payments, friend requests and
+              group invitations show up here.
             </p>
           )}
 
@@ -207,9 +280,46 @@ export default function NotificationsBell({ onChange }: Props) {
             </section>
           )}
 
-          <Link className="mn-notifications-footer" href="/friends" onClick={() => setOpen(false)}>
-            Manage friends
-          </Link>
+          {activity.length > 0 && (
+            <section aria-labelledby="bell-activity">
+              <h2 id="bell-activity">Activity</h2>
+              <ul className="mn-activity-list">
+                {activity.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      href={`/groups/${item.groupId}`}
+                      className={`mn-activity-item${item.unread ? " is-unread" : ""}`}
+                      onClick={() => setOpen(false)}
+                    >
+                      <span className="mn-activity-dot" aria-hidden="true" />
+                      <span className="mn-activity-body">
+                        <span className="mn-activity-text">
+                          <b>{item.text.actor}</b> {item.text.verb} <b>{item.text.object}</b>
+                        </span>
+                        <span className="mn-activity-meta">
+                          {item.detail && <>{item.detail} · </>}
+                          {item.groupName}
+                        </span>
+                      </span>
+                      <time className="mn-activity-time" dateTime={item.date} title={new Date(item.date).toLocaleString()}>
+                        {timeAgo(item.date)}
+                      </time>
+                      {item.unread && <span className="mn-visually-hidden">(new)</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <div className="mn-notifications-footer-row">
+            <Link className="mn-notifications-footer" href="/history" onClick={() => setOpen(false)}>
+              All activity
+            </Link>
+            <Link className="mn-notifications-footer" href="/friends" onClick={() => setOpen(false)}>
+              Manage friends
+            </Link>
+          </div>
         </div>
       )}
     </div>
