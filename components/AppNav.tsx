@@ -110,11 +110,11 @@ export default function AppNav({ active, groups }: Props) {
           className={`mn-nav-add ${quickOpen ? "is-open" : ""}`}
           onClick={() => setQuickOpen((open) => !open)}
           aria-label={quickOpen ? "Close quick actions" : "Quick actions"}
+          title={quickOpen ? "Close quick actions" : "Quick actions"}
           aria-expanded={quickOpen}
           aria-haspopup="dialog"
         >
           <span aria-hidden="true">{quickOpen ? "×" : "+"}</span>
-          <span className="mn-nav-add-label">{quickOpen ? "Close" : "Add Expense"}</span>
         </button>
 
         {/* Profile sits at the bottom-left of the sidebar (desktop). */}

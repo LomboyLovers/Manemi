@@ -143,3 +143,31 @@ test("a recorded payment cancels the debt it pays", () => {
   assert.equal(settled.forUser("J").net, 0);
   assert.deepEqual(settled.forUser("J").counterparties, []);
 });
+
+import { groupRawItems, rawItemsFor, type RawSource } from "./ledger.ts";
+
+test("raw breakdown lists every unsimplified line and nets to your balance", () => {
+  const e = (id: string, payerId: string, date: string, shares: Record<string, number>, kind: "expense" | "payment" = "expense"): RawSource => ({
+    id, kind, title: id, date, groupId: "g", payerId,
+    totalCents: Object.values(shares).reduce((a, b) => a + b, 0),
+    shares: Object.entries(shares).map(([userId, cents]) => ({ userId, cents })),
+  });
+  // You (a) paid dinner 300 for a,b,c; c paid taxi 90 for a,b,c; b paid you back 50.
+  const entries = [
+    e("dinner", "a", "2026-11-01", { a: 10000, b: 10000, c: 10000 }),
+    e("taxi", "c", "2026-11-02", { a: 3000, b: 3000, c: 3000 }),
+    e("payback", "b", "2026-11-03", { a: 5000 }, "payment"),
+    e("not-mine", "b", "2026-11-04", { b: 100, c: 100 }),
+  ];
+  const items = rawItemsFor("a", entries);
+  assert.deepEqual(items.map((i) => [i.id, i.otherId, i.cents]), [
+    ["payback", "b", -5000],
+    ["taxi", "c", -3000],
+    ["dinner", "b", 10000],
+    ["dinner", "c", 10000],
+  ]);
+  const people = groupRawItems(items);
+  assert.deepEqual(people.map((p) => [p.otherId, p.cents]), [["b", 5000], ["c", 7000]].sort((x, y) => y[1] - x[1]));
+  const ledger = buildLedger(entries);
+  assert.equal(items.reduce((sum, i) => sum + i.cents, 0), ledger.forUser("a").net, "raw lines add up to your balance");
+});

@@ -157,17 +157,15 @@
     font-weight: 600;
     box-shadow: inset 3px 0 0 var(--mn-accent, #8b3dff);
   }
+  /* Plus only: a round button under the brand that opens Quick actions. */
   .mn-nav-add {
     order: -1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-height: 48px;
-    margin-bottom: 16px;
-    border-radius: 14px;
-    font-size: 15px;
-    font-weight: 600;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    margin: 0 0 16px 4px;
+    border-radius: 50%;
   }
   .mn-nav-brand {
     order: -2;

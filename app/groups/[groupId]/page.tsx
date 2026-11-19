@@ -17,10 +17,11 @@ import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
 import { CATEGORY_META, categoryKey, CURRENCIES, isZero, money, peso } from "@/lib/manemi/format";
 import { receiptLink } from "@/lib/manemi/functions";
 import { cleanError } from "@/lib/manemi/friends";
+import RawBreakdown from "@/components/RawBreakdown";
 import Avatar from "@/components/Avatar";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PaymentsList, { type PaymentRow } from "@/components/PaymentsList";
-import { buildLedger, paymentEntry, sharesFromSplitRows } from "@/lib/manemi/ledger";
+import { buildLedger, groupRawItems, paymentEntry, rawItemsFor, sharesFromSplitRows, type RawSource } from "@/lib/manemi/ledger";
 
 type Group = {
   groupId: string;
@@ -58,6 +59,8 @@ export default function GroupDetailsPage() {
   const [group, setGroup] = useState<Group | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  // When each expense was added (from the audit log), for "newest first".
+  const [addedAt, setAddedAt] = useState<Map<string, string>>(new Map());
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [myRole, setMyRole] = useState<"owner" | "admin" | "member">("member");
   // Completed settle-ups: they cancel the debts they pay back.
@@ -123,7 +126,7 @@ export default function GroupDetailsPage() {
 
       // Everything below only needs the group ID, so load it in parallel.
       // The roster doubles as the membership check.
-      const [groupResult, rosterResult, expenseResult, paymentResult] =
+      const [groupResult, rosterResult, expenseResult, paymentResult, addedResult] =
         await Promise.all([
           supabase
             .from("Group")
@@ -146,9 +149,23 @@ export default function GroupDetailsPage() {
             .select("settlementId, payerId, receiverId, amount, paymentMethod, settledAt, createdAt")
             .eq("groupId", params.groupId)
             .eq("status", "completed"),
+          supabase
+            .from("Group_Activity")
+            .select("entityId, createdAt")
+            .eq("groupId", params.groupId)
+            .eq("action", "expense_created"),
         ]);
 
       if (!active) return;
+
+      setAddedAt(
+        new Map(
+          ((addedResult.data ?? []) as Array<{ entityId: string; createdAt: string }>).map((row) => [
+            String(row.entityId),
+            String(row.createdAt),
+          ]),
+        ),
+      );
 
       const { data: memberRows, error: memberError } = rosterResult;
       if (memberError) {
@@ -305,7 +322,8 @@ export default function GroupDetailsPage() {
     Boolean(group) && !group?.isArchived && (myRole === "owner" || myRole === "admin");
 
   // Balances from each expense's real participants (see lib/manemi/ledger).
-  const ledger = useMemo(() => {
+  // The same entries feed the raw breakdown, so both always agree.
+  const ledgerEntries = useMemo((): RawSource[] => {
     const splitsByExpense = new Map<string, ExpenseSplit[]>();
     for (const split of expenseSplits) {
       const list = splitsByExpense.get(split.expenseId) ?? [];
@@ -313,17 +331,20 @@ export default function GroupDetailsPage() {
       splitsByExpense.set(split.expenseId, list);
     }
     const paid = payments
-      .map((payment) =>
-        paymentEntry(
+      .map((payment) => ({
+        ...paymentEntry(
           payment.settlementId,
           payment.payerId,
           payment.receiverId,
           Math.round(Number(payment.amount) * 100) || 0,
           params.groupId,
         ),
-      )
+        kind: "payment" as const,
+        title: "Payment",
+        date: String(payment.settledAt ?? payment.createdAt ?? ""),
+      }))
       .filter((entry) => entry.totalCents > 0);
-    return buildLedger([
+    return [
       ...paid,
       ...expenses.filter((expense) => (expense.currency ?? "PHP") === "PHP").map((expense) => {
         const totalCents = Math.round(Number(expense.totalAmount) * 100) || 0;
@@ -347,10 +368,18 @@ export default function GroupDetailsPage() {
           payerId: expense.paidBy_UserId,
           totalCents,
           shares,
+          kind: "expense" as const,
+          title: expense.title,
+          date: expense.expenseDate,
         };
       }),
-    ]);
+    ];
   }, [expenses, expenseSplits, members, payments, params.groupId]);
+  const ledger = useMemo(() => buildLedger(ledgerEntries), [ledgerEntries]);
+  const rawPeople = useMemo(
+    () => (currentUserId ? groupRawItems(rawItemsFor(currentUserId, ledgerEntries)) : []),
+    [currentUserId, ledgerEntries],
+  );
 
   const myBalance = currentUserId ? ledger.forUser(currentUserId) : null;
   const myNet = balanceError || !myBalance ? null : myBalance.net / 100;
@@ -468,10 +497,16 @@ export default function GroupDetailsPage() {
     ),
   ] as string[];
 
+  // Newest first: the most recently added expense is at the top (expenses
+  // from before the audit log fall back to their date).
+  const newestFirst = useMemo(() => {
+    const key = (expense: Expense) => new Date(addedAt.get(expense.expenseId) ?? expense.expenseDate).getTime() || 0;
+    return [...expenses].sort((a, b) => key(b) - key(a));
+  }, [expenses, addedAt]);
   const filteredExpenses =
     activeCategory === "All"
-      ? expenses
-      : expenses.filter((expense) => expense.category === activeCategory);
+      ? newestFirst
+      : newestFirst.filter((expense) => expense.category === activeCategory);
   // Stay on a real page after deletes shrink the list.
   const expensePageNow = Math.min(
     expensePage,
@@ -891,6 +926,7 @@ export default function GroupDetailsPage() {
                     })}
                   </ul>
                 )}
+                {myPeople.length > 0 && <RawBreakdown people={rawPeople} nameOf={memberName} />}
 
 
                 {canAct && (

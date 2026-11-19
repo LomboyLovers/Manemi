@@ -10,9 +10,13 @@ import type { createClient } from "@/lib/supabase/client";
 import { categoryKey, type CategoryKey } from "./format.ts";
 import {
   buildLedger,
+  groupRawItems,
   paymentEntry,
+  rawItemsFor,
   sharesFromSplitRows,
   type LedgerExpense,
+  type RawPerson,
+  type RawSource,
 } from "./ledger.ts";
 
 type Supabase = ReturnType<typeof createClient>;
@@ -42,6 +46,10 @@ export type GroupSummary = {
   net: number;
   /** Who you owe / who owes you, largest first. */
   counterparties: Counterparty[];
+  /** Raw breakdown: every peso expense/payment line with each person, before simplifying. */
+  raw: RawPerson[];
+  /** Names for the people in `raw`. */
+  rawNames: Record<string, string>;
   /** Total of every expense in the group (pesos). */
   spent: number;
   expenseCount: number;
@@ -306,7 +314,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
 
   // Turn each expense into ledger form using its real participants.
   let missingParticipants = 0;
-  const ledgerByGroup = new Map<string, LedgerExpense[]>();
+  const ledgerByGroup = new Map<string, RawSource[]>();
   const history: HistoryExpense[] = [];
   for (const row of expenseRows) {
     const totalCents = Math.round((Number(row.totalAmount) || 0) * 100);
@@ -330,7 +338,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     // Balances are in pesos; other currencies are shown but not netted in.
     if (currency === "PHP") {
       const list = ledgerByGroup.get(row.groupId) ?? [];
-      list.push(entry);
+      list.push({ ...entry, kind: "expense", title: row.title, date: row.expenseDate });
       ledgerByGroup.set(row.groupId, list);
     }
 
@@ -356,7 +364,12 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     const cents = Math.round((Number(row.amount) || 0) * 100);
     if (cents <= 0) continue;
     const list = ledgerByGroup.get(row.groupId) ?? [];
-    list.push(paymentEntry(row.settlementId, row.payerId, row.receiverId, cents, row.groupId));
+    list.push({
+      ...paymentEntry(row.settlementId, row.payerId, row.receiverId, cents, row.groupId),
+      kind: "payment",
+      title: "Payment",
+      date: row.settledAt ?? row.createdAt ?? "",
+    });
     ledgerByGroup.set(row.groupId, list);
     history.push({
       kind: "payment",
@@ -435,6 +448,10 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
           name: nameOf(item.userId),
           amount: toPesos(item.cents),
         })),
+        ...(() => {
+          const raw = groupRawItems(rawItemsFor(me.id, expenses));
+          return { raw, rawNames: Object.fromEntries(raw.map((person) => [person.otherId, nameOf(person.otherId)])) };
+        })(),
         spent,
         expenseCount: groupHistory.length,
         spentThisMonth,

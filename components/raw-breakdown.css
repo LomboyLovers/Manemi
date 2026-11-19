@@ -1,0 +1,165 @@
+/* "See raw breakdown" dropdown (components/RawBreakdown.tsx) */
+.mn-raw {
+  margin-top: 10px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.mn-raw summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 14px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--mn-accent-light, #c4a1ff);
+  font-size: 15px;
+  font-weight: 600;
+}
+.mn-raw summary::-webkit-details-marker {
+  display: none;
+}
+.mn-raw summary small {
+  flex: 1;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+  font-weight: 500;
+}
+.mn-raw-chevron {
+  flex: none;
+  color: var(--mn-tertiary, #8a8a95);
+}
+.mn-raw[open] .mn-raw-chevron {
+  transform: rotate(180deg);
+}
+.mn-raw summary:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: -2px;
+  border-radius: 14px;
+}
+.mn-raw-intro,
+.mn-raw-note {
+  margin: 0 14px 10px;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.mn-raw-person {
+  margin: 0 10px 10px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 12px;
+  background: var(--mn-surface, #1c1c21);
+}
+.mn-raw-person header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--mn-border, #3a3a43);
+  font-size: 14px;
+}
+.mn-raw-person ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mn-raw-person li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+}
+.mn-raw-person li + li {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.mn-raw-text {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.mn-raw-text > span {
+  overflow: hidden;
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mn-raw-text small {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+}
+.mn-raw-person li strong {
+  flex: none;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.mn-raw .is-positive {
+  color: var(--mn-positive, #3ddc84);
+}
+.mn-raw .is-negative {
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-raw-more {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  border-top: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 0 0 12px 12px;
+  background: transparent;
+  color: var(--mn-accent-light, #c4a1ff);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-raw-more:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: -2px;
+}
+.mn-raw-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--mn-input, #25252b);
+}
+.mn-raw-totals div {
+  display: grid;
+  gap: 2px;
+}
+.mn-raw-totals dt {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+}
+.mn-raw-totals dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* Cards on the Groups page */
+.mn-raw.is-compact summary {
+  min-height: 44px;
+  font-size: 14px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mn-raw-chevron {
+    transition: transform 150ms ease;
+  }
+}
+.mn-raw.is-compact summary small {
+  display: none;
+}
+.mn-raw.is-compact summary span {
+  flex: 1;
+}
+.mn-raw.is-compact .mn-raw-totals {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+}
+.mn-raw-totals dd {
+  white-space: nowrap;
+}

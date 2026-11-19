@@ -1,5 +1,6 @@
 "use client";
 
+import RawBreakdown from "@/components/RawBreakdown";
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -683,6 +684,13 @@ export default function GroupsPage() {
                                     </li>
                                   )}
                                 </ul>
+                              )}
+                              {group.counterparties.length > 0 && (
+                                <RawBreakdown
+                                  people={group.raw}
+                                  nameOf={(id) => group.rawNames[id] ?? "A former member"}
+                                  compact
+                                />
                               )}
                               {group.expenseCount > 0 && (
                                 <p className="manemi-breakdown-spent">

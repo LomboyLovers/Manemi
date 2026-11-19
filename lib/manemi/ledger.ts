@@ -195,3 +195,58 @@ export function sharesFromSplitRows(totalCents: number, rows: SplitRow[]): Share
   const cents = apportion(totalCents, ids, weights);
   return ids.map((userId) => ({ userId, cents: cents[userId] }));
 }
+
+// ---------------------------------------------------------------------
+// Raw breakdown (transparency): every expense and payment between you and
+// each person, before anything is netted or simplified.
+// ---------------------------------------------------------------------
+
+/** One line of the raw breakdown. cents > 0: they owe you; < 0: you owe them. */
+export type RawItem = {
+  id: string;
+  kind: "expense" | "payment";
+  title: string;
+  /** ISO date of the expense or payment. */
+  date: string;
+  otherId: string;
+  cents: number;
+};
+
+export type RawSource = LedgerExpense & { kind: "expense" | "payment"; title: string; date: string };
+
+/** Raw lines for `me` from the same entries the balances are built from. */
+export function rawItemsFor(me: string, entries: RawSource[]): RawItem[] {
+  const items: RawItem[] = [];
+  for (const entry of entries) {
+    if (entry.payerId === me) {
+      // You paid: everyone else in it owes you their share (a payment you made counts back toward you).
+      for (const share of entry.shares) {
+        if (share.userId !== me && share.cents > 0) {
+          items.push({ id: entry.id, kind: entry.kind, title: entry.title, date: entry.date, otherId: share.userId, cents: share.cents });
+        }
+      }
+    } else {
+      const mine = entry.shares.find((share) => share.userId === me)?.cents ?? 0;
+      if (mine > 0) {
+        items.push({ id: entry.id, kind: entry.kind, title: entry.title, date: entry.date, otherId: entry.payerId, cents: -mine });
+      }
+    }
+  }
+  return items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+export type RawPerson = { otherId: string; cents: number; items: RawItem[] };
+
+/** Raw lines grouped per person (net per person = pairwise balance), people you owe first. */
+export function groupRawItems(items: RawItem[]): RawPerson[] {
+  const byPerson = new Map<string, RawPerson>();
+  for (const item of items) {
+    const person = byPerson.get(item.otherId) ?? { otherId: item.otherId, cents: 0, items: [] };
+    person.cents += item.cents;
+    person.items.push(item);
+    byPerson.set(item.otherId, person);
+  }
+  return [...byPerson.values()].sort(
+    (a, b) => Number(a.cents > 0) - Number(b.cents > 0) || Math.abs(b.cents) - Math.abs(a.cents),
+  );
+}
