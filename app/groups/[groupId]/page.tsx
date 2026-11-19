@@ -21,6 +21,7 @@ import { cleanError } from "@/lib/manemi/friends";
 import RawBreakdown from "@/components/RawBreakdown";
 import Avatar from "@/components/Avatar";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import MembersSheet, { type MemberRow } from "@/components/MembersSheet";
 import PaymentsList, { type PaymentRow } from "@/components/PaymentsList";
 import { buildLedger, groupRawItems, paymentEntry, rawItemsFor, sharesFromSplitRows, type RawSource } from "@/lib/manemi/ledger";
 
@@ -77,6 +78,7 @@ export default function GroupDetailsPage() {
   const [nameDraft, setNameDraft] = useState("");
   const [renameError, setRenameError] = useState("");
   const [removing, setRemoving] = useState<{ userId: string; name: string } | null>(null);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [receiptState, setReceiptState] = useState<"idle" | "loading" | "error">("idle");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -671,6 +673,18 @@ export default function GroupDetailsPage() {
 
               {menuOpen && (
                 <div className="md-menu" role="menu">
+                  {group && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setMembersOpen(true);
+                      }}
+                    >
+                      Members ({members.length})
+                    </button>
+                  )}
                   {group && !group.isArchived && (
                     <button
                       type="button"
@@ -736,6 +750,34 @@ export default function GroupDetailsPage() {
               setSettleWith(null);
               setExpenseNotice(message);
               setActiveTab("balances");
+            }}
+          />
+        )}
+
+        {membersOpen && group && (
+          <MembersSheet
+            groupName={group.name}
+            meId={currentUserId}
+            myRole={myRole}
+            archived={Boolean(group.isArchived)}
+            members={members.map(
+              (member): MemberRow => ({
+                userId: member.userId,
+                name: member.name,
+                avatarUrl: member.avatarUrl ?? null,
+                role: member.role ?? "member",
+                userCode: member.userCode ?? null,
+                net: (memberNets.get(member.userId) ?? 0) / 100,
+              }),
+            )}
+            onClose={() => setMembersOpen(false)}
+            onRemove={async (member) => {
+              const { error: rpcError } = await createClient().rpc("remove_group_member", {
+                p_group_id: group.groupId,
+                p_user_id: member.userId,
+              });
+              if (rpcError) throw new Error(cleanError(rpcError, "Couldn't remove them."));
+              notifyDataChanged();
             }}
           />
         )}
@@ -1117,7 +1159,10 @@ export default function GroupDetailsPage() {
                                     <strong className="md-balance-amount">
                                       {formatPeso(Math.abs(member.net))}
                                     </strong>
-                                    {isOwner && canAct && !isMe && isZero(member.net) && (
+                                    {canAct &&
+                                      !isMe &&
+                                      isZero(member.net) &&
+                                      (isOwner ? info?.role !== "owner" : myRole === "admin" && info?.role === "member") && (
                                       <button
                                         type="button"
                                         className="md-balance-remove"
@@ -1131,7 +1176,7 @@ export default function GroupDetailsPage() {
                                 );
                               })}
                           </div>
-                          {isOwner && canAct && members.length > 1 && (
+                          {(isOwner || myRole === "admin") && canAct && members.length > 1 && (
                             <p className="md-balances-note">Only members who are settled up can be removed.</p>
                           )}
 
