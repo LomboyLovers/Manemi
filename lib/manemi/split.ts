@@ -171,3 +171,84 @@ export function convertSplit(
     ),
   };
 }
+
+// ---------------------------------------------------------------------
+// One shared split. Every member's share is stored once, as a fraction of
+// the whole expense (FULL_WEIGHT = 100%). Equally, Exact and Percent are
+// only views of it, so switching modes never re-rounds, and changing the
+// amount rescales everyone proportionally.
+// ---------------------------------------------------------------------
+
+/** 100% of an expense. 1e12 keeps every amount exact to the centavo (max ₱99,999,999.99) and stays well inside safe integers. */
+export const FULL_WEIGHT = 1_000_000_000_000;
+const WEIGHT_PER_BPS = FULL_WEIGHT / FULL_PERCENT_BPS;
+
+export type Weights = Record<string, number>;
+
+/** Members who have a share. */
+export function withShare(ids: string[], weights: Weights): string[] {
+  return ids.filter((id) => (weights[id] ?? 0) > 0);
+}
+
+/** Everyone in `ids` gets the same share; the first members take any leftover. */
+export function equalWeights(ids: string[]): Weights {
+  return apportion(FULL_WEIGHT, ids, Object.fromEntries(ids.map((id) => [id, 1])));
+}
+
+/**
+ * Projects the shared split onto `target` units (cents of the total, or
+ * basis points of 100%). A complete split always adds up to exactly
+ * `target`; an incomplete one shows each person's literal share.
+ */
+function project(target: number, ids: string[], weights: Weights): Record<string, number> {
+  const out: Record<string, number> = Object.fromEntries(ids.map((id) => [id, 0]));
+  const people = withShare(ids, weights);
+  if (target <= 0 || !people.length) return out;
+  const weightSum = people.reduce((sum, id) => sum + weights[id], 0);
+  // Rounding each share can be off by half a unit, so "complete" allows that much.
+  if (Math.abs(weightSum - FULL_WEIGHT) <= people.length) {
+    return { ...out, ...apportion(target, people, weights) };
+  }
+  for (const id of people) out[id] = Math.round((target * weights[id]) / FULL_WEIGHT);
+  return out;
+}
+
+/** Each member's share of `totalCents`, in cents. */
+export function weightsToCents(totalCents: number, ids: string[], weights: Weights) {
+  return project(totalCents, ids, weights);
+}
+
+/** Each member's share in basis points (100% = 10000). */
+export function weightsToBps(ids: string[], weights: Weights) {
+  return project(FULL_PERCENT_BPS, ids, weights);
+}
+
+/** ₱ amount (in cents) of `totalCents` -> weight. 0 when there's no total yet. */
+export function centsToWeight(cents: number, totalCents: number): number {
+  return totalCents > 0 ? Math.round((cents * FULL_WEIGHT) / totalCents) : 0;
+}
+
+/** Basis points -> weight (exact). */
+export function bpsToWeight(bps: number): number {
+  return bps * WEIGHT_PER_BPS;
+}
+
+/** Share of the whole split that's assigned, in weight units. */
+export function assignedWeight(ids: string[], weights: Weights): number {
+  return withShare(ids, weights).reduce((sum, id) => sum + weights[id], 0);
+}
+
+/**
+ * Keeps only what a money or percent field may contain: digits and one
+ * decimal point, at most 2 decimals and `maxWhole` digits before the point.
+ * "1,250.505" -> "1250.50", "abc" -> "", "-5e3" -> "53", "." -> "0."
+ */
+export function cleanDecimalInput(text: string, maxWhole = 8): string {
+  const kept = text.replace(/[^0-9.]/g, "");
+  const dot = kept.indexOf(".");
+  let whole = dot === -1 ? kept : kept.slice(0, dot);
+  const fraction = dot === -1 ? null : kept.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+  whole = whole.replace(/^0+(?=\d)/, "").slice(0, maxWhole);
+  if (fraction === null) return whole;
+  return `${whole || "0"}.${fraction}`;
+}

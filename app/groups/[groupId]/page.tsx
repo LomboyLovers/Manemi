@@ -1146,19 +1146,6 @@ export default function GroupDetailsPage() {
 
                           <div className="md-transaction-info">
                             <h3>{expense.title}</h3>
-                            {(() => {
-                              const who = involvement(expense);
-                              return who.cents > 0 ? (
-                                <p className={`md-involve is-${who.tone}`}>
-                                  <b>
-                                    {who.label}: {money(who.cents / 100, expense.currency)}
-                                  </b>{" "}
-                                  <span>of {money(who.total / 100, expense.currency)}</span>
-                                </p>
-                              ) : (
-                                <p className="md-involve is-muted">{who.label}</p>
-                              );
-                            })()}
                             <p>
                               Paid by{" "}
                               {expense.paidBy_UserId === currentUserId
@@ -1178,9 +1165,23 @@ export default function GroupDetailsPage() {
                           </div>
 
                           <div className="md-transaction-amount">
-                            <strong>
-                              {money(Number(expense.totalAmount), expense.currency)}
-                            </strong>
+                            {(() => {
+                              const who = involvement(expense);
+                              const total = money(who.total / 100, expense.currency);
+                              return (
+                                <p className={`md-involve is-${who.tone}`}>
+                                  {who.cents > 0 ? (
+                                    <b>
+                                      <span className="md-involve-label">{who.label}:</span>{" "}
+                                      {money(who.cents / 100, expense.currency)}
+                                    </b>
+                                  ) : (
+                                    <b>{who.label}</b>
+                                  )}
+                                  <small>{who.cents > 0 ? `of ${total}` : `${total} total`}</small>
+                                </p>
+                              );
+                            })()}
                             <span
                               className="md-category-tag"
                               style={{

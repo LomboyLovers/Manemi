@@ -7,14 +7,19 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 import {
-  computeShares,
-  convertSplit,
+  bpsToWeight,
+  centsToWeight,
+  cleanDecimalInput,
+  equalWeights,
   FULL_PERCENT_BPS,
   hundredthsToInput,
-  sharesToBps,
   toBps,
   toCents,
+  weightsToBps,
+  weightsToCents,
+  withShare,
   type SplitMode,
+  type Weights,
 } from "@/lib/manemi/split";
 
 import DatePicker from "@/components/DatePicker";
@@ -96,9 +101,12 @@ export default function AddExpensePage() {
 
   const [mode, setMode] = useState<SplitMode>("equally");
 
-  const [selected, setSelected] = useState<string[]>([]);
+  // The one source for the split: each member's share of the whole expense.
+  // Equally / Exact / Percent are only views of it.
+  const [weights, setWeights] = useState<Weights>({});
 
-  const [entries, setEntries] = useState<Record<string, string>>({});
+  // Text of the share input being typed in, so "12." or "0.0" isn't reformatted mid-typing.
+  const [draft, setDraft] = useState<{ id: string; text: string } | null>(null);
 
   // ?edit=<expenseId> opens an existing expense (EXP-09).
   const [editId] = useState(() =>
@@ -211,7 +219,7 @@ export default function AddExpensePage() {
       setGroup(data);
       setUserId(auth.user.id);
       setMembers(groupMembers);
-      setSelected(memberIds);
+      setWeights(equalWeights(memberIds));
       setPayerId(auth.user.id);
 
       if (editId) {
@@ -243,19 +251,16 @@ export default function AddExpensePage() {
 
         const rows = (splitResult.data ?? []) as Array<{ userId: string; amountOwed: number | string | null; percentage: number | string | null }>;
         if (rows.length) {
-          const ids = rows.map((row) => row.userId);
-          setSelected(ids);
           const cents = rows.map((row) => Math.round(Number(row.amountOwed ?? 0) * 100));
           if (rows.every((row) => row.percentage !== null && row.percentage !== undefined)) {
             setMode("percent");
-            setEntries(Object.fromEntries(rows.map((row) => [row.userId, String(Number(row.percentage))])));
           } else if (Math.max(...cents) - Math.min(...cents) <= 1) {
             setMode("equally");
-            setEntries({});
           } else {
             setMode("exact");
-            setEntries(Object.fromEntries(rows.map((row, index) => [row.userId, (cents[index] / 100).toFixed(2)])));
           }
+          // The saved amounts are the shared split; every mode views them.
+          setWeights(Object.fromEntries(rows.map((row, index) => [row.userId, centsToWeight(cents[index], totalCents)])));
         }
       }
       setLoading(false);
@@ -270,26 +275,20 @@ export default function AddExpensePage() {
 
   const total = parseCents(amount);
 
-  const split = useMemo(
-    () => computeShares(mode, total, { selected, entries }),
-    [mode, total, selected, entries],
-  );
+  const memberIds = useMemo(() => members.map((member) => member.id), [members]);
+  const selected = useMemo(() => withShare(memberIds, weights), [memberIds, weights]);
+
+  // Each member's share in cents and in basis points (100% = 10000), both
+  // read from the same weights, so the views always agree.
+  const split = useMemo(() => weightsToCents(total, memberIds, weights), [total, memberIds, weights]);
+  const shareBps = useMemo(() => weightsToBps(memberIds, weights), [memberIds, weights]);
 
   const assigned = Object.values(split).reduce((sum, cents) => sum + cents, 0);
-
-  // Integer basis points (100% = 10000) avoid floating point drift.
-  const percentageBps = selected.reduce(
-    (sum, id) => sum + toBps(entries[id] ?? ""),
-    0,
-  );
+  const percentageBps = Object.values(shareBps).reduce((sum, bps) => sum + bps, 0);
   const percentageSum = percentageBps / 100;
 
   const invalidPercentage =
-    mode === "percent" &&
-    selected.some((id) => {
-      const value = Number(entries[id] || 0);
-      return !Number.isFinite(value) || value < 0 || value > 100;
-    });
+    mode === "percent" && selected.some((id) => (shareBps[id] ?? 0) > FULL_PERCENT_BPS);
 
   const validSplit =
     selected.length > 0 &&
@@ -298,19 +297,19 @@ export default function AddExpensePage() {
         ? assigned === total
         : percentageBps === FULL_PERCENT_BPS && !invalidPercentage));
 
-  // Percent of the total each member's exact amount represents.
-  const exactPercents = useMemo(
-    () => sharesToBps(total, selected, split),
-    [total, selected, split],
-  );
-
-  /** Switch split method, carrying the current shares over. */
+  /** Switch views. Exact and Percent show the same split; Equally evens it out among the people in it. */
   function changeMode(next: SplitMode) {
     if (next === mode) return;
-    const converted = convertSplit(mode, next, total, { selected, entries });
-    setSelected(converted.selected);
-    setEntries(converted.entries);
+    if (next === "equally") setWeights(equalWeights(selected.length ? selected : memberIds));
+    setDraft(null);
     setMode(next);
+  }
+
+  /** Typing a share in Exact (₱) or Percent (%) updates the shared split. */
+  function changeShare(id: string, text: string) {
+    setDraft({ id, text });
+    const weight = mode === "exact" ? centsToWeight(toCents(text), total) : bpsToWeight(toBps(text));
+    setWeights((current) => ({ ...current, [id]: weight }));
   }
 
   const formValid =
@@ -370,7 +369,7 @@ export default function AddExpensePage() {
             selected.includes(member.id) &&
             (mode === "equally" ||
               (mode === "percent"
-                ? toBps(entries[member.id] ?? "") > 0
+                ? (shareBps[member.id] ?? 0) > 0
                 : (split[member.id] ?? 0) > 0)),
         )
 
@@ -387,7 +386,9 @@ export default function AddExpensePage() {
             return {
               userId: member.id,
 
-              percentage: Number(entries[member.id]),
+              percentage: (shareBps[member.id] ?? 0) / 100,
+              // The amount shown on screen; the server keeps it when it matches the percentage.
+              amount: (split[member.id] ?? 0) / 100,
             };
           }
 
@@ -474,12 +475,10 @@ export default function AddExpensePage() {
     }
   }
 
+  /** Equally: include or exclude someone, then even out the shares again. */
   const toggleMember = (id: string) => {
-    setSelected((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : [...current, id],
-    );
+    const next = memberIds.filter((member) => (member === id ? !selected.includes(member) : selected.includes(member)));
+    setWeights(equalWeights(next));
   };
 
   return (
@@ -518,33 +517,17 @@ export default function AddExpensePage() {
 
                   <input
                     id="ae-amount"
-                    type="number"
+                    type="text"
                     inputMode="decimal"
-                    min="0"
-                    step="0.01"
+                    autoComplete="off"
                     placeholder="0.00"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    // Numbers only: digits and one decimal point, up to ₱99,999,999.99.
+                    onChange={(e) => setAmount(cleanDecimalInput(e.target.value))}
                     // Sized to its content so "₱ amount" stays centered.
                     style={{ width: `${Math.max((amount || "0.00").length, 1) + 0.6}ch` }}
                   />
                 </div>
-              </div>
-
-              <div className="ae-currency">
-                <Select
-                  id="ae-currency"
-                  label="Currency"
-                  variant="chip"
-                  align="start"
-                  value={currency}
-                  onChange={setCurrency}
-                  options={CURRENCIES.map((item) => ({
-                    value: item.code,
-                    label: `${item.code} · ${item.label}`,
-                    hint: item.code === "PHP" ? "Counts toward group balances" : "Shown separately from peso balances",
-                  }))}
-                />
               </div>
 
               <label className="ae-visually-hidden" htmlFor="ae-title">
@@ -587,6 +570,22 @@ export default function AddExpensePage() {
                         ),
                       };
                     })}
+                  />
+                </div>
+
+                <div className="ae-info-row">
+                  <span id="ae-currency-label">Currency</span>
+
+                  <Select
+                    id="ae-currency"
+                    label="Currency"
+                    value={currency}
+                    onChange={setCurrency}
+                    options={CURRENCIES.map((item) => ({
+                      value: item.code,
+                      label: `${item.symbol} ${item.code}`,
+                      hint: item.code === "PHP" ? item.label : `${item.label} · not in peso balances`,
+                    }))}
                   />
                 </div>
 
@@ -686,7 +685,7 @@ export default function AddExpensePage() {
                   onClick={() => changeMode("exact")}
                   aria-pressed={mode === "exact"}
                 >
-                  Exact ₱
+                  Exact {symbol}
                 </button>
 
                 <button
@@ -698,6 +697,10 @@ export default function AddExpensePage() {
                   Percent %
                 </button>
               </div>
+
+              {mode === "exact" && total <= 0 && (
+                <p className="ae-split-hint">Enter the amount first to split it by exact amounts.</p>
+              )}
 
               <div className="ae-member-list">
                 {members.map((member) => {
@@ -728,7 +731,7 @@ export default function AddExpensePage() {
                         )}
                         {mode === "exact" && total > 0 && (
                           <small>
-                            {hundredthsToInput(exactPercents[member.id] ?? 0) ||
+                            {hundredthsToInput(shareBps[member.id] ?? 0) ||
                               "0"}
                             % of total
                           </small>
@@ -746,29 +749,25 @@ export default function AddExpensePage() {
                             {mode === "exact" ? "amount" : "percentage"}
                           </span>
 
-                          {mode === "exact" && <span>₱</span>}
+                          {mode === "exact" && <span>{symbol}</span>}
 
                           <input
-                            type="number"
+                            type="text"
                             inputMode="decimal"
-                            min="0"
-                            max={mode === "percent" ? "100" : undefined}
-                            step="0.01"
+                            autoComplete="off"
                             placeholder="0"
-                            value={entries[member.id] ?? ""}
-                            onChange={(e) => {
-                              setEntries((prev) => ({
-                                ...prev,
-
-                                [member.id]: e.target.value,
-                              }));
-
-                              setSelected((prev) =>
-                                prev.includes(member.id)
-                                  ? prev
-                                  : [...prev, member.id],
-                              );
-                            }}
+                            disabled={mode === "exact" && total <= 0}
+                            value={
+                              draft?.id === member.id
+                                ? draft.text
+                                : hundredthsToInput(
+                                    mode === "exact" ? split[member.id] ?? 0 : shareBps[member.id] ?? 0,
+                                  )
+                            }
+                            onChange={(e) =>
+                              changeShare(member.id, cleanDecimalInput(e.target.value, mode === "percent" ? 3 : 8))
+                            }
+                            onBlur={() => setDraft(null)}
                           />
 
                           {mode === "percent" && <span>%</span>}

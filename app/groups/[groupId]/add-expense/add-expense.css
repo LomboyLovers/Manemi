@@ -439,17 +439,6 @@
   gap: 6px;
 }
 
-/* Currency picker under the amount */
-.ae-currency {
-  display: flex;
-  justify-content: center;
-  margin: -6px 0 18px;
-}
-.ae-currency .mn-select-chip .mn-select-trigger {
-  min-height: 40px;
-  font-size: 14px;
-}
-
 /* Receipt attachment row */
 .ae-receipt {
   display: flex;
@@ -493,4 +482,15 @@
   padding: 0 16px 12px;
   color: var(--mn-negative, #ff6b6b);
   font-size: 13px;
+}
+
+.ae-split-hint {
+  margin: 0 0 12px;
+  color: #b4b4be;
+  font-size: 14px;
+}
+
+.ae-share-input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

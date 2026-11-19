@@ -1635,16 +1635,25 @@
 }
 
 /* ---------- "You owe ₱5,000 of ₱10,000" on each expense ---------- */
-.md-transaction-info .md-involve {
-  margin: 2px 0 2px;
-  font-size: 14px;
+/* Your part of each expense, on the right of the card:
+   "Total collectible: ₱333.34" (green) / "You owe: ₱X" (red), with "of ₱total" small and gray. */
+.md-transaction-amount .md-involve {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 0;
+  text-align: right;
 }
 .md-involve b {
+  font-size: 15px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.md-involve span {
+.md-involve small {
   color: var(--mn-tertiary, #8a8a95);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .md-involve.is-negative b {
   color: var(--mn-negative, #ff6b6b);
@@ -1652,9 +1661,26 @@
 .md-involve.is-positive b {
   color: var(--mn-positive, #3ddc84);
 }
-.md-involve.is-muted {
+.md-involve.is-muted b {
   color: var(--mn-tertiary, #8a8a95);
   font-size: 13px;
+  font-weight: 600;
+}
+/* .md-transaction-amount span styles the category tag; keep the label plain */
+.md-transaction-amount .md-involve .md-involve-label {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  border-radius: 0;
+}
+@media (max-width: 767.98px) {
+  /* Phones: label on its own small line so the title keeps its room */
+  .md-transaction-amount .md-involve .md-involve-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+  }
 }
 
 /* ---------- rename in place (same box as the title) ---------- */

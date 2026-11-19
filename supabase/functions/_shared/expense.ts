@@ -80,6 +80,20 @@ export function buildSplits(b: z.infer<typeof baseSchema>): { splits: Split[] } 
     if (sum !== 10000) {
       return { error: `Percentages add up to ${sum / 100}%, but they must add up to exactly 100%` };
     }
+    // The app sends the amounts it showed alongside the percentages. Keep them when
+    // they add up to the total and each one matches its percentage to within the
+    // 0.01% the percentage was rounded to, so what was on screen is what's saved.
+    if (b.participants.every((p) => p.amount !== undefined)) {
+      const cents = b.participants.map((p) => toCents(p.amount!));
+      const matches =
+        cents.reduce((s, c) => s + c, 0) === total &&
+        cents.every((c, i) => Math.abs(c * 10000 - total * items[i].bp) <= total / 2 + 10000);
+      if (matches) {
+        return {
+          splits: items.map((it, i) => ({ userId: it.userId, amount: fromCents(cents[i]), percentage: it.bp / 100 })),
+        };
+      }
+    }
     return { splits: splitByPercentage(total, items) };
   }
 
