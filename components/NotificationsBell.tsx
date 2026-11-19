@@ -22,8 +22,11 @@ import {
 } from "@/lib/manemi/notifications";
 import "./friends.css";
 
-/** Re-check for new activity this often while the tab is visible. */
-const POLL_MS = 60_000;
+/**
+ * Backup check while the tab is visible. Changes normally arrive instantly
+ * through live updates (lib/manemi/realtime.ts → data-changed event).
+ */
+const POLL_MS = 5 * 60_000;
 
 type Props = {
   /** Called after something changes (e.g. a friend request was accepted). */
@@ -76,8 +79,8 @@ export default function NotificationsBell({ onChange }: Props) {
     );
   }, []);
 
-  // Load on mount, whenever data changes in the app, when the tab comes back
-  // into view, and every minute while it's visible.
+  // Load on mount, whenever data changes (including live updates from other
+  // people), when the tab comes back into view, and every 5 minutes as a backup.
   useEffect(() => {
     void load();
   }, [load, dataVersion]);

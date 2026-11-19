@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useLiveUpdates } from "@/lib/manemi/realtime";
 import type { GroupSummary } from "@/lib/manemi/groups";
 import { createClient } from "@/lib/supabase/client";
 import { loadCurrentUser } from "@/lib/manemi/friends";
@@ -58,6 +59,8 @@ type Props = {
  * Pages using it add the `mn-app-page` class to their <main>.
  */
 export default function AppNav({ active, groups }: Props) {
+  // Every app page has the nav, so this keeps every page live (one shared connection).
+  useLiveUpdates();
   const [quickOpen, setQuickOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [me, setMe] = useState<Awaited<ReturnType<typeof loadCurrentUser>>>(null);

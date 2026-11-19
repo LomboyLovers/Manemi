@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import HomeSkeleton from "@/components/HomeSkeleton";
 import PageHeader from "@/components/PageHeader";
 import AppNav from "@/components/AppNav";
+import DirectionIcon from "@/components/DirectionIcon";
 import Icon from "@/components/Icon";
 import { useDataVersion } from "@/lib/manemi/events";
 import {
@@ -211,7 +212,7 @@ export default function Dashboard() {
               <div className="dashboard-balance-grid">
                 <div className="dashboard-balance-tile">
                   <p>
-                    <span className="balance-positive">↙</span> Owed to you
+                    <span className="balance-positive"><DirectionIcon dir="in" /></span> Owed to you
                   </p>
                   <strong className="balance-positive">
                     {peso(totals.owedToYou)}
@@ -219,7 +220,7 @@ export default function Dashboard() {
                 </div>
                 <div className="dashboard-balance-tile">
                   <p>
-                    <span className="balance-negative">↗</span> You owe
+                    <span className="balance-negative"><DirectionIcon dir="out" /></span> You owe
                   </p>
                   <strong className="balance-negative">
                     {peso(totals.youOwe)}
@@ -271,11 +272,8 @@ export default function Dashboard() {
                           {group.isCreator ? " · Admin" : ""}
                         </p>
                         <p className={tone}>
-                          {isZero(net)
-                            ? "✓ Settled up"
-                            : net > 0
-                              ? "↙ You're owed"
-                              : "↗ You owe"}
+                          <DirectionIcon dir={isZero(net) ? "done" : net > 0 ? "in" : "out"} />{" "}
+                          {isZero(net) ? "Settled up" : net > 0 ? "You're owed" : "You owe"}
                         </p>
                         <strong
                           className={

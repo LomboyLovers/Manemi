@@ -3500,3 +3500,10 @@ button:disabled {
   color: var(--mn-accent-light, #c4a1ff);
   font-weight: 600;
 }
+
+/* Balance direction icons (components/DirectionIcon.tsx): sit on the text baseline. */
+.mn-dir-icon {
+  display: inline-block;
+  flex: none;
+  vertical-align: -0.125em;
+}

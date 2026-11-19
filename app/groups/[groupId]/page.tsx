@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import "./group-details.css";
 import GroupDetailsSkeleton from "@/components/GroupDetailsSkeleton";
 import AppNav from "@/components/AppNav";
+import DirectionIcon from "@/components/DirectionIcon";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog from "@/components/LeaveGroupDialog";
 import SettleUpSheet from "@/components/SettleUpSheet";
@@ -888,10 +889,10 @@ export default function GroupDetailsPage() {
                     myNet === null
                       ? { cls: "md-balance-unknown", icon: "?", text: "Balance unavailable" }
                       : isZero(myNet)
-                        ? { cls: "md-balance-zero", icon: "✓", text: "Settled up" }
+                        ? { cls: "md-balance-zero", icon: <DirectionIcon dir="done" />, text: "Settled up" }
                         : myNet > 0
-                          ? { cls: "md-balance-positive", icon: "↙", text: "You're owed" }
-                          : { cls: "md-balance-negative", icon: "↗", text: "You owe" };
+                          ? { cls: "md-balance-positive", icon: <DirectionIcon dir="in" />, text: "You're owed" }
+                          : { cls: "md-balance-negative", icon: <DirectionIcon dir="out" />, text: "You owe" };
                   return (
                     <div className={`md-settled ${tone.cls}`}>
                       <span className="md-settled-icon" aria-hidden="true">
@@ -1026,7 +1027,15 @@ export default function GroupDetailsPage() {
                                         {owesYou ? `${name} owes you` : `You owe ${name}`}
                                       </strong>
                                       <small>
-                                        {owesYou ? "↙ Owed to you" : "↗ Your debt"}
+                                        {owesYou ? (
+                                          <>
+                                            <DirectionIcon dir="in" /> Owed to you
+                                          </>
+                                        ) : (
+                                          <>
+                                            <DirectionIcon dir="out" /> Your debt
+                                          </>
+                                        )}
                                       </small>
                                     </div>
                                     <strong className="md-balance-amount">
@@ -1047,7 +1056,7 @@ export default function GroupDetailsPage() {
                               })
                             ) : (
                               <p className="md-balances-empty">
-                                ✓ You&apos;re square with everyone in this group.
+                                <DirectionIcon dir="done" /> You&apos;re square with everyone in this group.
                               </p>
                             )}
                           </div>
@@ -1072,11 +1081,14 @@ export default function GroupDetailsPage() {
                                     <div className="md-balance-name">
                                       <strong>{label}</strong>
                                       <small>
+                                        <DirectionIcon
+                                          dir={isZero(member.net) ? "done" : member.net > 0 ? "in" : "out"}
+                                        />{" "}
                                         {isZero(member.net)
-                                          ? "✓ Settled up"
+                                          ? "Settled up"
                                           : member.net > 0
-                                            ? `↙ ${isMe ? "Are" : "Is"} owed overall`
-                                            : `↗ ${isMe ? "Owe" : "Owes"} overall`}
+                                            ? `${isMe ? "Are" : "Is"} owed overall`
+                                            : `${isMe ? "Owe" : "Owes"} overall`}
                                       </small>
                                     </div>
                                     <strong className="md-balance-amount">

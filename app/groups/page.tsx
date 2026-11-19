@@ -19,6 +19,7 @@ import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog, { type LeaveBalance } from "@/components/LeaveGroupDialog";
 import Icon, { type IconName } from "@/components/Icon";
 import AppNav from "@/components/AppNav";
+import DirectionIcon, { type Direction } from "@/components/DirectionIcon";
 import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
 import { searchGroupIds, setGroupCategory as saveGroupCategory } from "@/lib/manemi/search";
 import {
@@ -53,11 +54,11 @@ type CustomIconProps = {
 type GroupData = GroupSummary & { icon: IconName };
 
 /** Direction of a personal balance, per the design system rules. */
-function balanceTone(net: number) {
-  if (isZero(net)) return { tone: "zero", arrow: "✓", label: "Settled up" };
+function balanceTone(net: number): { tone: string; arrow: Direction; label: string } {
+  if (isZero(net)) return { tone: "zero", arrow: "done", label: "Settled up" };
   return net > 0
-    ? { tone: "positive", arrow: "↙", label: "You're owed" }
-    : { tone: "negative", arrow: "↗", label: "You owe" };
+    ? { tone: "positive", arrow: "in", label: "You're owed" }
+    : { tone: "negative", arrow: "out", label: "You owe" };
 }
 
 type Filter = "All" | GroupCategory;
@@ -466,7 +467,7 @@ export default function GroupsPage() {
                         : `${totals.net < 0 && !isZero(totals.net) ? "−" : ""}${peso(Math.abs(totals.net))}`}
                     </strong>
                     <small>
-                      <span aria-hidden="true">{netTone.arrow}</span>{" "}
+                      <DirectionIcon dir={netTone.arrow} />{" "}
                       {isZero(totals.net)
                         ? "You're all square across your groups"
                         : totals.net > 0
@@ -482,7 +483,7 @@ export default function GroupsPage() {
                         {peso(totals.owedToYou)}
                       </strong>
                       <small>
-                        <span aria-hidden="true">↙</span> Owed to you
+                        <DirectionIcon dir="in" /> Owed to you
                       </small>
                     </div>
                     <div className="manemi-rich-balance-box">
@@ -491,7 +492,7 @@ export default function GroupsPage() {
                         {peso(totals.youOwe)}
                       </strong>
                       <small className="manemi-rich-red">
-                        <span aria-hidden="true">↗</span> You owe
+                        <DirectionIcon dir="out" /> You owe
                       </small>
                     </div>
                   </div>
@@ -780,7 +781,7 @@ export default function GroupsPage() {
                 }}
               >
                 <span className="manemi-action-symbol" aria-hidden="true">
-                  ↗
+                  <DirectionIcon dir="out" />
                 </span>
                 Open Group
                 <span className="manemi-action-chevron" aria-hidden="true">
@@ -1183,7 +1184,7 @@ const GroupCard = memo(function GroupCard({ group, index, menuOpen, onOpen, onPr
           {(() => {
             const tone =
               group.status === "settled"
-                ? { tone: "zero", arrow: "✓", label: "Settled" }
+                ? { tone: "zero", arrow: "done" as Direction, label: "Settled" }
                 : balanceTone(group.net);
             return (
               <div
@@ -1194,7 +1195,7 @@ const GroupCard = memo(function GroupCard({ group, index, menuOpen, onOpen, onPr
                 </span>
                 <strong>{peso(Math.abs(group.net))}</strong>
                 <span className="manemi-card-direction">
-                  <span aria-hidden="true">{tone.arrow}</span>{" "}
+                  <DirectionIcon dir={tone.arrow} />{" "}
                   {tone.label}
                 </span>
                 <small>
@@ -1233,9 +1234,7 @@ const GroupCard = memo(function GroupCard({ group, index, menuOpen, onOpen, onPr
                     }
                   >
                     <span className="manemi-debt-text">
-                      <span aria-hidden="true">
-                        {person.amount > 0 ? "↙" : "↗"}
-                      </span>{" "}
+                      <DirectionIcon dir={person.amount > 0 ? "in" : "out"} />{" "}
                       {person.amount > 0 ? (
                         <>
                           <b>{person.name}</b> owes you
