@@ -9,6 +9,7 @@ import {
   earliestNeeded,
   niceScale,
   periodChange,
+  smoothPath,
   spendingSeries,
   type SpendingPeriod,
 } from "@/lib/manemi/spending";
@@ -17,8 +18,9 @@ import "./spending-stats.css";
 const toIsoDay = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-const CHART_HEIGHT = 184;
-const PAD = { top: 14, right: 18, bottom: 30, left: 52 };
+const CHART_HEIGHT = 228;
+// Room for the y-axis title + labels on the left and the x labels + title below.
+const PAD = { top: 12, right: 12, bottom: 52, left: 70 };
 
 /** Home: how much you spent this week / month, compared with the one before, plus a trend line. */
 export default function SpendingStats({ userId }: { userId: string }) {
@@ -63,17 +65,20 @@ export default function SpendingStats({ userId }: { userId: string }) {
   const scale = niceScale(Math.max(...points.map((point) => point.cents)));
   const plotWidth = Math.max(width - PAD.left - PAD.right, 1);
   const plotHeight = CHART_HEIGHT - PAD.top - PAD.bottom;
-  const x = (index: number) => PAD.left + (points.length === 1 ? plotWidth / 2 : (index * plotWidth) / (points.length - 1));
+  // Each period gets an equal slot; its point sits in the middle (like the reference: Mon is inset from the axis).
+  const slot = plotWidth / Math.max(points.length, 1);
+  const x = (index: number) => PAD.left + slot * (index + 0.5);
   const y = (cents: number) => PAD.top + plotHeight - (cents / scale.max) * plotHeight;
   const ticks = [0, 1, 2, 3, 4].map((step) => step * scale.step);
-  const path = points.map((point, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(point.cents).toFixed(1)}`).join(" ");
+  const path = smoothPath(points.map((point, index) => ({ x: x(index), y: y(point.cents) })));
+  const axisBottom = PAD.top + plotHeight;
   const shown = active ?? points.length - 1;
 
   function pointFromPointer(clientX: number) {
     const box = chartRef.current?.getBoundingClientRect();
     if (!box || points.length < 2) return;
     const relative = clientX - box.left - PAD.left;
-    const index = Math.round((relative / plotWidth) * (points.length - 1));
+    const index = Math.floor(relative / slot);
     setActive(Math.min(points.length - 1, Math.max(0, index)));
   }
 
@@ -158,37 +163,57 @@ export default function SpendingStats({ userId }: { userId: string }) {
           >
             {width > 0 && (
               <svg width={width} height={CHART_HEIGHT} aria-hidden="true" focusable="false">
+                {/* Horizontal gridlines with y tick marks and labels */}
                 {ticks.map((tick) => (
                   <g key={tick}>
-                    <line className="mn-spend-grid" x1={PAD.left} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} />
-                    <text className="mn-spend-axis" x={PAD.left - 8} y={y(tick)} textAnchor="end" dominantBaseline="middle">
+                    {tick > 0 && <line className="mn-spend-grid" x1={PAD.left} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} />}
+                    <line className="mn-spend-tick" x1={PAD.left - 5} x2={PAD.left} y1={y(tick)} y2={y(tick)} />
+                    <text className="mn-spend-axis" x={PAD.left - 9} y={y(tick)} textAnchor="end" dominantBaseline="middle">
                       {tick === 0 ? "₱0" : `₱${new Intl.NumberFormat("en-PH", { notation: "compact", maximumFractionDigits: 1 }).format(tick / 100)}`}
                     </text>
                   </g>
                 ))}
-                {points.map((point, index) => (
-                  <text
-                    key={point.start.toISOString()}
-                    className={`mn-spend-axis ${index === shown ? "is-active" : ""}`}
-                    x={x(index)}
-                    y={CHART_HEIGHT - 8}
-                    textAnchor="middle"
-                  >
-                    {/* Thin out week labels on narrow screens */}
-                    {period === "week" && plotWidth < 380 && index % 2 !== (points.length - 1) % 2 ? "" : point.label}
-                  </text>
-                ))}
+                {/* Axes */}
+                <line className="mn-spend-axis-line" x1={PAD.left} x2={PAD.left} y1={PAD.top} y2={axisBottom} />
+                <line className="mn-spend-axis-line" x1={PAD.left} x2={width - PAD.right} y1={axisBottom} y2={axisBottom} />
+                {/* X tick marks and labels */}
+                {points.map((point, index) => {
+                  const thin = period === "week" && plotWidth < 380 && index % 2 !== (points.length - 1) % 2;
+                  return (
+                    <g key={point.start.toISOString()}>
+                      <line className="mn-spend-tick" x1={x(index)} x2={x(index)} y1={axisBottom} y2={axisBottom + 5} />
+                      {!thin && (
+                        <text className={`mn-spend-axis ${index === shown ? "is-active" : ""}`} x={x(index)} y={axisBottom + 20} textAnchor="middle">
+                          {point.label}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
+                {/* Axis titles */}
+                <text className="mn-spend-axis-title" x={PAD.left + plotWidth / 2} y={CHART_HEIGHT - 6} textAnchor="middle">
+                  {period === "week" ? "Week starting" : "Month"}
+                </text>
+                <text
+                  className="mn-spend-axis-title"
+                  x={0}
+                  y={0}
+                  textAnchor="middle"
+                  transform={`translate(14 ${PAD.top + plotHeight / 2}) rotate(-90)`}
+                >
+                  Your share (₱)
+                </text>
                 {active !== null && (
-                  <line className="mn-spend-crosshair" x1={x(shown)} x2={x(shown)} y1={PAD.top} y2={PAD.top + plotHeight} />
+                  <line className="mn-spend-crosshair" x1={x(shown)} x2={x(shown)} y1={PAD.top} y2={axisBottom} />
                 )}
                 <path className="mn-spend-line" d={path} />
                 {points.map((point, index) => (
                   <circle
                     key={point.start.toISOString()}
-                    className={`mn-spend-point ${index === points.length - 1 ? "is-current" : ""} ${index === shown ? "is-active" : ""}`}
+                    className={`mn-spend-point ${index === shown && active !== null ? "is-active" : ""}`}
                     cx={x(index)}
                     cy={y(point.cents)}
-                    r={index === shown ? 6 : 5}
+                    r={index === shown && active !== null ? 5.5 : 3.5}
                   />
                 ))}
               </svg>

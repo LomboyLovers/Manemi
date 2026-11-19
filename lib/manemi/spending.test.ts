@@ -55,3 +55,21 @@ test("axis uses round steps", () => {
   assert.deepEqual(niceScale(15050), { max: 20000, step: 5000 }); // ₱150.50 -> 0..₱200
   assert.deepEqual(niceScale(0), { max: 100, step: 25 }); // nothing yet: ₱0..₱1
 });
+
+import { smoothPath } from "./spending.ts";
+
+test("smooth line passes through every point and never overshoots", () => {
+  const pts = [
+    { x: 0, y: 100 }, { x: 10, y: 60 }, { x: 20, y: 65 }, { x: 30, y: 100 }, { x: 40, y: 10 }, { x: 50, y: 12 }, { x: 60, y: 30 },
+  ];
+  const d = smoothPath(pts);
+  for (const p of pts.slice(1)) assert.ok(d.includes(` ${p.x},${p.y}`), `passes through ${p.x},${p.y}`);
+  // Every control point stays within the y-range of its segment (no bulges).
+  const segments = d.split(" C").slice(1).map((s) => s.trim().split(" ").map((xy) => xy.split(",").map(Number)));
+  segments.forEach(([c1, c2, end], i) => {
+    const lo = Math.min(pts[i].y, end[1]);
+    const hi = Math.max(pts[i].y, end[1]);
+    for (const c of [c1, c2]) assert.ok(c[1] >= lo - 0.05 && c[1] <= hi + 0.05, `segment ${i} control ${c[1]} within ${lo}..${hi}`);
+  });
+  assert.equal(smoothPath([{ x: 5, y: 5 }]), "M5,5");
+});

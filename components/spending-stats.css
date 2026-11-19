@@ -106,7 +106,7 @@
 }
 .mn-spend-chart {
   position: relative;
-  height: 184px;
+  height: 228px;
   border-radius: 12px;
   touch-action: pan-y;
   cursor: crosshair;
@@ -116,8 +116,18 @@
   overflow: visible;
 }
 .mn-spend-grid {
-  stroke: #2e2e36;
+  stroke: #2c2c34;
   stroke-width: 1;
+}
+.mn-spend-axis-line,
+.mn-spend-tick {
+  stroke: #6e6e78;
+  stroke-width: 1.25;
+}
+.mn-spend-axis-title {
+  fill: var(--mn-muted, #a8a8b3);
+  font-size: 13px;
+  font-weight: 600;
 }
 .mn-spend-axis {
   fill: var(--mn-tertiary, #8a8a95);
@@ -141,17 +151,13 @@
   stroke-linecap: round;
 }
 .mn-spend-point {
-  fill: var(--mn-surface, #1c1c21);
-  stroke: #a77bff;
-  stroke-width: 2.5;
-}
-.mn-spend-point.is-current {
   fill: #a77bff;
+  stroke: var(--mn-surface, #1c1c21);
+  stroke-width: 1.5;
 }
 .mn-spend-point.is-active {
   stroke: #fff;
   stroke-width: 2;
-  fill: #a77bff;
 }
 .mn-spend-tooltip {
   position: absolute;
@@ -177,7 +183,7 @@
 }
 .mn-spend-empty {
   position: absolute;
-  inset: 30% 12px auto 52px;
+  inset: 30% 12px auto 70px;
   margin: 0;
   color: var(--mn-muted, #a8a8b3);
   font-size: 14px;

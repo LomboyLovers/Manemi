@@ -98,3 +98,45 @@ export function niceScale(maxCents: number): { max: number; step: number } {
   const step = [1, 2, 2.5, 5, 10].map((m) => m * magnitude).find((value) => value >= raw) ?? 10 * magnitude;
   return { max: step * 4 * 100, step: step * 100 };
 }
+
+/**
+ * SVG path for a smooth line through the points (monotone cubic, Fritsch–Carlson).
+ * Unlike a plain spline it never bulges above or below the data, so the curve
+ * can't suggest spending that didn't happen or dip under ₱0.
+ */
+export function smoothPath(points: Array<{ x: number; y: number }>): string {
+  const n = points.length;
+  if (n === 0) return "";
+  if (n === 1) return `M${points[0].x},${points[0].y}`;
+  const dx = points.slice(1).map((p, i) => p.x - points[i].x);
+  const slope = points.slice(1).map((p, i) => (p.y - points[i].y) / dx[i]);
+  const tangent = points.map((_, i) => {
+    if (i === 0) return slope[0];
+    if (i === n - 1) return slope[n - 2];
+    return slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2;
+  });
+  for (let i = 0; i < n - 1; i++) {
+    if (slope[i] === 0) {
+      tangent[i] = 0;
+      tangent[i + 1] = 0;
+      continue;
+    }
+    const a = tangent[i] / slope[i];
+    const b = tangent[i + 1] / slope[i];
+    const h = a * a + b * b;
+    if (h > 9) {
+      const t = 3 / Math.sqrt(h);
+      tangent[i] = t * a * slope[i];
+      tangent[i + 1] = t * b * slope[i];
+    }
+  }
+  const f = (v: number) => Number(v.toFixed(1));
+  let d = `M${f(points[0].x)},${f(points[0].y)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const third = dx[i] / 3;
+    d += ` C${f(points[i].x + third)},${f(points[i].y + tangent[i] * third)} ${f(points[i + 1].x - third)},${f(
+      points[i + 1].y - tangent[i + 1] * third,
+    )} ${f(points[i + 1].x)},${f(points[i + 1].y)}`;
+  }
+  return d;
+}
