@@ -91,6 +91,10 @@ export default function NotificationsBell({ onChange }: Props) {
       await respondGroupInvitation(createClient(), invite.invitationId, accept);
       setInvitations((list) => list.filter((item) => item.invitationId !== invite.invitationId));
       if (accept) {
+        // NOTIF-03: confirmation email (best effort; never blocks joining).
+        void createClient()
+          .functions.invoke("notify-group-joined", { body: { groupId: invite.groupId } })
+          .catch(() => undefined);
         setOpen(false);
         router.push(`/groups/${invite.groupId}`);
       }

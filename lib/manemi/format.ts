@@ -8,6 +8,28 @@ const pesoFormatter = new Intl.NumberFormat("en-PH", {
 /** Always ₱ with 2 decimals, via Intl en-PH. */
 export const peso = (amount: number) => pesoFormatter.format(amount);
 
+export const CURRENCIES = [
+  { code: "PHP", label: "Philippine Peso", symbol: "₱" },
+  { code: "USD", label: "US Dollar", symbol: "$" },
+  { code: "EUR", label: "Euro", symbol: "€" },
+  { code: "JPY", label: "Japanese Yen", symbol: "¥" },
+  { code: "KRW", label: "Korean Won", symbol: "₩" },
+] as const;
+export type CurrencyCode = (typeof CURRENCIES)[number]["code"];
+
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+/** Amount in any supported currency (PHP by default). */
+export function money(amount: number, currency: string | null | undefined = "PHP") {
+  const code = currency || "PHP";
+  if (code === "PHP") return peso(amount);
+  let formatter = moneyFormatters.get(code);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("en-PH", { style: "currency", currency: code });
+    moneyFormatters.set(code, formatter);
+  }
+  return formatter.format(amount);
+}
+
 // Icons are SVGs (components/CategoryIcon), never emoji.
 // Matches the database's expense_category list.
 export type CategoryKey =

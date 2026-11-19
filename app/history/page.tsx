@@ -12,7 +12,8 @@ import {
   type GroupSummary,
   type HistoryExpense,
 } from "@/lib/manemi/groups";
-import { CATEGORY_META, peso } from "@/lib/manemi/format";
+import { CATEGORY_META, money, peso } from "@/lib/manemi/format";
+import DatePicker from "@/components/DatePicker";
 import { ACTIVITY_META, type ActivityItem } from "@/lib/manemi/activity";
 import { PAGE_SIZE, searchActivity, searchHistory } from "@/lib/manemi/search";
 import { useDebounced } from "@/lib/manemi/useDebounced";
@@ -102,10 +103,10 @@ function involvement(item: HistoryExpense, myId: string) {
   if (item.payerId === myId) {
     const lent = item.amount - item.yourShare;
     return lent > 0.004
-      ? { tone: "positive", text: `You lent ${peso(lent)}` }
+      ? { tone: "positive", text: `You lent ${money(lent, item.currency)}` }
       : { tone: "muted", text: "Only you" };
   }
-  if (item.yourShare > 0) return { tone: "negative", text: `You owe ${peso(item.yourShare)}` };
+  if (item.yourShare > 0) return { tone: "negative", text: `You owe ${money(item.yourShare, item.currency)}` };
   return { tone: "muted", text: "Not involved" };
 }
 
@@ -124,6 +125,12 @@ export default function HistoryPage() {
   const [groupId, setGroupId] = useState("all");
   const [sort, setSort] = useState<Sort>("newest");
   const [onlyMine, setOnlyMine] = useState(false);
+  // HIST-02: category, member and date range
+  const [category, setCategory] = useState("all");
+  const [memberId, setMemberId] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [people, setPeople] = useState<Array<{ id: string; name: string }>>([]);
   const [page, setPage] = useState(1);
   const [showOptions, setShowOptions] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -149,6 +156,24 @@ export default function HistoryPage() {
         setUserId(result.user.id);
         setUser(result.user);
         setGroups(result.groups);
+        // Everyone in your groups, for the member filter.
+        const ids = [...new Set(result.groups.flatMap((group) => group.memberIds))];
+        if (ids.length)
+          void createClient()
+            .from("User")
+            .select("userId, name")
+            .in("userId", ids)
+            .then(({ data }) => {
+              if (!active || !data) return;
+              setPeople(
+                (data as Array<{ userId: string; name: string | null }>)
+                  .map((row) => ({
+                    id: row.userId,
+                    name: row.userId === result.user.id ? "You" : String(row.name ?? "").trim() || "Member",
+                  }))
+                  .sort((a, b) => (a.name === "You" ? -1 : b.name === "You" ? 1 : a.name.localeCompare(b.name))),
+              );
+            });
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : "Unable to load history.");
@@ -164,7 +189,7 @@ export default function HistoryPage() {
   // New filters start again at page 1.
   useEffect(() => {
     setPage(1);
-  }, [kind, groupId, debouncedSearch, onlyMine, sort]);
+  }, [kind, groupId, debouncedSearch, onlyMine, sort, category, memberId, dateFrom, dateTo]);
 
   const isLog = kind === "activity";
 
@@ -175,7 +200,7 @@ export default function HistoryPage() {
     setListLoading(true);
     setListError("");
     const supabase = createClient();
-    const filters = { groupId, query: debouncedSearch, onlyMine, sort };
+    const filters = { groupId, query: debouncedSearch, onlyMine, sort, category, memberId, from: dateFrom, to: dateTo };
     const request = isLog
       ? searchActivity(supabase, userId, filters, page)
       : searchHistory(supabase, userId, { ...filters, kind: kind as "all" | "expenses" | "payments" }, page);
@@ -185,7 +210,9 @@ export default function HistoryPage() {
         if (isLog) setLogItems(result.items as ActivityItem[]);
         else setItems(result.items as HistoryExpense[]);
         setTotal(result.total);
-        const unfiltered = !debouncedSearch.trim() && groupId === "all" && !onlyMine && kind === "all";
+        const unfiltered =
+          !debouncedSearch.trim() && groupId === "all" && !onlyMine && kind === "all" &&
+          category === "all" && memberId === "all" && !dateFrom && !dateTo;
         if (unfiltered) setEverything(result.total);
         // Deleted rows can leave us past the last page.
         if (!result.items.length && page > 1) setPage(Math.max(1, Math.ceil(result.total / PAGE_SIZE)));
@@ -199,7 +226,7 @@ export default function HistoryPage() {
     return () => {
       active = false; // a newer request replaced this one
     };
-  }, [userId, isLog, kind, groupId, debouncedSearch, onlyMine, sort, page, reloadKey, dataVersion]);
+  }, [userId, isLog, kind, groupId, debouncedSearch, onlyMine, sort, category, memberId, dateFrom, dateTo, page, reloadKey, dataVersion]);
 
   const changePage = (next: number) => {
     setPage(next);
@@ -213,7 +240,7 @@ export default function HistoryPage() {
       if (!optionsRef.current?.contains(event.target as Node)) setShowOptions(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.defaultPrevented) {
         setShowOptions(false);
         optionsButtonRef.current?.focus(); // return focus to the trigger
       }
@@ -243,18 +270,25 @@ export default function HistoryPage() {
   );
 
   const filtersActive =
-    Boolean(search.trim()) || kind !== "all" || groupId !== "all" || onlyMine || sort !== "newest";
+    Boolean(search.trim()) || kind !== "all" || groupId !== "all" || onlyMine || sort !== "newest" ||
+    category !== "all" || memberId !== "all" || Boolean(dateFrom || dateTo);
   const clearFilters = () => {
     setSearch("");
     setKind("all");
     setGroupId("all");
     setOnlyMine(false);
     setSort("newest");
+    setCategory("all");
+    setMemberId("all");
+    setDateFrom("");
+    setDateTo("");
   };
   const closeAdd = useCallback(() => setShowAdd(false), []);
 
   const groupOptions = groups;
-  const noFilters = !debouncedSearch.trim() && groupId === "all" && !onlyMine;
+  const noFilters =
+    !debouncedSearch.trim() && groupId === "all" && !onlyMine && category === "all" &&
+    memberId === "all" && !dateFrom && !dateTo;
 
   return (
     <main className="mn-app-page mn-history">
@@ -305,6 +339,36 @@ export default function HistoryPage() {
                   />
                   {isLog ? "Only activity involving me" : "Only expenses I'm part of"}
                 </label>
+                {!isLog && (
+                  <fieldset className="mn-history-dates">
+                    <legend>Date range</legend>
+                    <div>
+                      <span>From</span>
+                      {dateFrom ? (
+                        <DatePicker label="From" value={dateFrom} onChange={setDateFrom} max={dateTo || undefined} />
+                      ) : (
+                        <button type="button" className="mn-date-add" onClick={() => setDateFrom(dateTo || new Date().toISOString().slice(0, 8) + "01")}>
+                          Any time
+                        </button>
+                      )}
+                    </div>
+                    <div>
+                      <span>To</span>
+                      {dateTo ? (
+                        <DatePicker label="To" value={dateTo} onChange={setDateTo} />
+                      ) : (
+                        <button type="button" className="mn-date-add" onClick={() => setDateTo(new Date().toISOString().slice(0, 10))}>
+                          Today
+                        </button>
+                      )}
+                    </div>
+                    {(dateFrom || dateTo) && (
+                      <button type="button" className="mn-date-clear" onClick={() => { setDateFrom(""); setDateTo(""); }}>
+                        Clear dates
+                      </button>
+                    )}
+                  </fieldset>
+                )}
               </div>
             )}
           </div>
@@ -372,6 +436,38 @@ export default function HistoryPage() {
               ...groupOptions.map((group) => ({ value: group.id, label: group.name })),
             ]}
           />
+          {!isLog && kind !== "payments" && (
+            <Select
+              variant="chip"
+              align="start"
+              label="Category"
+              value={category}
+              active={category !== "all"}
+              onChange={setCategory}
+              options={[
+                { value: "all", label: "All categories" },
+                ...Object.entries(CATEGORY_META).map(([key, meta]) => ({ value: key, label: meta.label })),
+              ]}
+            />
+          )}
+          {!isLog && people.length > 1 && (
+            <Select
+              variant="chip"
+              align="start"
+              label="Member"
+              value={memberId}
+              active={memberId !== "all"}
+              onChange={setMemberId}
+              options={[{ value: "all", label: "Everyone" }, ...people.map((p) => ({ value: p.id, label: p.name }))]}
+            />
+          )}
+          {!isLog && (dateFrom || dateTo) && (
+            <button type="button" className="mn-chip is-selected" onClick={() => setShowOptions(true)}>
+              {dateFrom ? new Date(`${dateFrom}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric" }) : "Start"}
+              {" – "}
+              {dateTo ? new Date(`${dateTo}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric" }) : "Today"}
+            </button>
+          )}
         </div>
 
         {error && (
@@ -569,7 +665,7 @@ export default function HistoryPage() {
                           <small className={`is-${who.tone}`}>{who.text}</small>
                         </span>
                         <span className="mn-history-amount">
-                          <strong>{peso(item.amount)}</strong>
+                          <strong>{money(item.amount, item.currency)}</strong>
                           <span
                             className="mn-tag"
                             style={{

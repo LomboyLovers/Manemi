@@ -86,7 +86,7 @@ select pg_temp.check((select count(*) from public.search_activity(p_limit => 1, 
 
 reset role;
 set role anon;
-select pg_temp.check(not has_function_privilege('anon', 'public.search_history(text, uuid, text, boolean, text, integer, integer)', 'execute'), 'signed-out users cannot search');
+select pg_temp.check(not has_function_privilege('anon', 'public.search_history(text, uuid, text, boolean, text, integer, integer, text, uuid, timestamptz, timestamptz)', 'execute'), 'signed-out users cannot search');
 reset role;
 
 \echo ALL SEARCH TESTS PASSED

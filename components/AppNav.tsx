@@ -11,14 +11,21 @@ import QuickActions from "./QuickActions";
 import AccountSheet from "./AccountSheet";
 import "./app-nav.css";
 
-export type NavSection = "home" | "groups" | "friends" | "history";
+export type NavSection = "home" | "groups" | "friends" | "history" | "reports";
 
 const ITEMS: Array<{ id: NavSection; href: string; label: string; icon: string }> = [
   { id: "home", href: "/dashboard", label: "Home", icon: "home" },
   { id: "groups", href: "/groups", label: "Groups", icon: "group" },
   { id: "friends", href: "/friends", label: "Friends", icon: "friends" },
   { id: "history", href: "/history", label: "History", icon: "clock" },
+  { id: "reports", href: "/reports", label: "Reports", icon: "reports" },
 ];
+
+const ReportsIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+  </svg>
+);
 
 /** No PNG exists for Friends: a person-with-plus icon in the same style. */
 const FriendsIcon = () => (
@@ -73,6 +80,8 @@ export default function AppNav({ active, groups }: Props) {
             >
               {item.icon === "friends" ? (
               <FriendsIcon />
+            ) : item.icon === "reports" ? (
+              <ReportsIcon />
             ) : (
               <Image src={`/icons/${item.icon}.png`} alt="" width={20} height={20} />
             )}

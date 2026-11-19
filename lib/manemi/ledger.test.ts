@@ -20,6 +20,7 @@ test("5-person group, 2-person expense: only those 2 are involved", () => {
   // A paid ₱1,000 for A and B only. C, D, E were not part of it.
   const ledger = buildLedger([exp("e1", "A", 100000, { A: 50000, B: 50000 })]);
   assert.deepEqual(ledger.forUser("A").counterparties, [{ userId: "B", cents: 50000 }]);
+  assert.deepEqual(ledger.plan(), [{ from: "B", to: "A", cents: 50000 }]);
   assert.deepEqual(ledger.forUser("B").counterparties, [{ userId: "A", cents: -50000 }]);
   for (const id of ["C", "D", "E"]) {
     assert.equal(ledger.forUser(id).net, 0);
@@ -39,20 +40,42 @@ test("debts between the same two people net out", () => {
   assert.equal(a.youOwe, 0);
 });
 
-test("you can owe one person and be owed by another", () => {
+test("simplified: a chain of debts becomes one payment (BAL-04)", () => {
+  // J owes M 300 (M paid), K owes J 200 (J paid). Nets: M +300, J -100, K -200.
   const ledger = buildLedger([
-    exp("e1", "M", 60000, { M: 30000, J: 30000 }), // J owes M 300
-    exp("e2", "J", 40000, { J: 20000, K: 20000 }), // K owes J 200
+    exp("e1", "M", 60000, { M: 30000, J: 30000 }),
+    exp("e2", "J", 40000, { J: 20000, K: 20000 }),
+  ]);
+  assert.deepEqual(ledger.plan(), [
+    { from: "K", to: "M", cents: 20000 },
+    { from: "J", to: "M", cents: 10000 },
   ]);
   const j = ledger.forUser("J");
-  assert.equal(j.youOwe, 30000);
-  assert.equal(j.owedToYou, 20000);
+  assert.deepEqual(j.counterparties, [{ userId: "M", cents: -10000 }]);
   assert.equal(j.net, -10000);
-  // Largest amounts first.
-  assert.deepEqual(j.counterparties, [
+  assert.equal(j.youOwe, 10000);
+  assert.equal(j.owedToYou, 0);
+  // Direct balances are still available.
+  assert.deepEqual(ledger.pairwise("J"), [
     { userId: "M", cents: -30000 },
     { userId: "K", cents: 20000 },
   ]);
+});
+
+test("simplified plan settles everyone with at most n-1 payments", () => {
+  const ledger = buildLedger([
+    exp("e1", "A", 90000, { A: 30000, B: 30000, C: 30000 }),
+    exp("e2", "B", 60000, { B: 20000, C: 20000, D: 20000 }),
+    exp("e3", "D", 30000, { A: 15000, D: 15000 }),
+  ]);
+  const plan = ledger.plan();
+  assert.ok(plan.length <= 3);
+  const after = new Map(ledger.memberNets());
+  for (const t of plan) {
+    after.set(t.from, (after.get(t.from) ?? 0) + t.cents);
+    after.set(t.to, (after.get(t.to) ?? 0) - t.cents);
+  }
+  for (const value of after.values()) assert.equal(value, 0);
 });
 
 test("member nets add to zero", () => {

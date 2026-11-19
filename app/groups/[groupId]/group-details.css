@@ -1579,3 +1579,173 @@
 .md-top-actions .md-menu .md-menu-disabled:hover {
   background: transparent;
 }
+
+/* ---------- people you owe / who owe you (summary card) ---------- */
+.md-people {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.md-people li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 12px;
+}
+.md-people li + li {
+  border-top: 1px solid var(--mn-border, #3a3a43);
+}
+.md-people-avatar {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mn-input, #25252b);
+  font-size: 13px;
+  font-weight: 700;
+}
+.md-people-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.md-people strong {
+  font-variant-numeric: tabular-nums;
+}
+.md-people li.is-negative strong {
+  color: var(--mn-negative, #ff6b6b);
+}
+.md-people li.is-positive strong {
+  color: var(--mn-positive, #3ddc84);
+}
+.md-other-currency {
+  margin: 10px 0 0;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 13px;
+}
+
+/* ---------- "You owe ₱5,000 of ₱10,000" on each expense ---------- */
+.md-transaction-info .md-involve {
+  margin: 2px 0 2px;
+  font-size: 14px;
+}
+.md-involve b {
+  font-weight: 700;
+}
+.md-involve span {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+}
+.md-involve.is-negative b {
+  color: var(--mn-negative, #ff6b6b);
+}
+.md-involve.is-positive b {
+  color: var(--mn-positive, #3ddc84);
+}
+.md-involve.is-muted {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 13px;
+}
+
+/* ---------- rename in place (same box as the title) ---------- */
+.md-heading-text {
+  min-width: 0;
+  flex: 1;
+}
+.md-rename input {
+  width: 100%;
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid var(--mn-accent, #8b3dff);
+  border-radius: 10px;
+  background: var(--mn-input, #25252b);
+  color: var(--mn-text, #f5f5f7);
+  font: inherit;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+.md-rename-error {
+  margin: 4px 0 0;
+  color: var(--mn-negative, #ff6b6b);
+  font-size: 13px;
+}
+
+/* ---------- balances extras ---------- */
+.md-balances-note {
+  margin: 6px 0 0;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 13px;
+}
+.md-balance-remove {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--mn-negative, #ff6b6b) 50%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mn-negative, #ff6b6b);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.md-balance-remove:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+
+/* ---------- expense sheet: receipt + actions ---------- */
+.md-sheet-receipt {
+  margin: 16px 0 0;
+}
+.md-sheet-receipt > span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--mn-secondary, #b4b4be);
+  font-size: 14px;
+}
+.md-sheet-receipt img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 12px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  object-fit: contain;
+}
+.md-sheet-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+.md-sheet-actions .md-sheet-delete-button {
+  margin-top: 0;
+}
+.md-sheet-edit-button {
+  min-height: 52px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 14px;
+  background: var(--mn-input, #25252b);
+  color: var(--mn-text, #f5f5f7);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.md-sheet-note {
+  margin: 16px 0 0;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 13px;
+  text-align: center;
+}

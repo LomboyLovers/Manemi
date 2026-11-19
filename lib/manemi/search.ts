@@ -17,6 +17,19 @@ export type HistoryFilters = {
   query: string;
   onlyMine: boolean;
   sort: "newest" | "oldest" | "largest";
+  /** HIST-02 */
+  category?: string | "all";
+  memberId?: string | "all";
+  /** "YYYY-MM-DD", inclusive */
+  from?: string;
+  to?: string;
+};
+
+const dayStart = (iso: string) => new Date(`${iso}T00:00:00`).toISOString();
+const dayAfter = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString();
 };
 
 export type Page<T> = { items: T[]; total: number };
@@ -40,6 +53,7 @@ type HistoryRow = {
   payment_method: string | null;
   your_share: number | string;
   involves_you: boolean;
+  currency?: string | null;
   total_count: number | string;
 };
 
@@ -58,6 +72,10 @@ export async function searchHistory(
     p_sort: filters.sort,
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
+    p_category: filters.category && filters.category !== "all" ? filters.category : null,
+    p_member_id: filters.memberId && filters.memberId !== "all" ? filters.memberId : null,
+    p_from: filters.from ? dayStart(filters.from) : null,
+    p_to: filters.to ? dayAfter(filters.to) : null,
   });
   if (error) throw new Error(`Couldn't load history: ${error.message}`);
   const rows = (data ?? []) as HistoryRow[];
@@ -104,6 +122,7 @@ export async function searchHistory(
       payerName,
       yourShare: Number(row.your_share) || 0,
       involvesYou: row.involves_you,
+      currency: row.currency ?? "PHP",
     };
   });
   return { items, total: Number(rows[0]?.total_count ?? 0) };
@@ -206,4 +225,45 @@ export async function searchGroupIds(supabase: Supabase, query: string): Promise
   return new Set(
     [...(byName.data ?? []), ...(byExpense.data ?? [])].map((row: { groupId: string }) => row.groupId),
   );
+}
+
+export type ReportRow = {
+  id: string;
+  groupId: string;
+  groupName: string;
+  title: string;
+  amount: number;
+  currency: string;
+  category: string;
+  date: string;
+  payerId: string;
+  payerName: string;
+  yourShare: number;
+};
+
+/** DASH-02..05: every expense in the range (your groups, or one group). */
+export async function reportExpenses(
+  supabase: Supabase,
+  me: string,
+  options: { groupId: string | "all"; from?: string; to?: string },
+): Promise<ReportRow[]> {
+  const { data, error } = await supabase.rpc("report_expenses", {
+    p_group_id: options.groupId === "all" ? null : options.groupId,
+    p_from: options.from ? dayStart(options.from) : null,
+    p_to: options.to ? dayAfter(options.to) : null,
+  });
+  if (error) throw new Error(`Couldn't load the report: ${error.message}`);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    groupId: String(row.group_id),
+    groupName: String(row.group_name ?? ""),
+    title: String(row.title ?? "Expense"),
+    amount: Number(row.amount) || 0,
+    currency: String(row.currency ?? "PHP"),
+    category: String(row.category ?? "other"),
+    date: String(row.happened_at),
+    payerId: String(row.payer_id),
+    payerName: row.payer_id === me ? "You" : String(row.payer_name ?? "A former member"),
+    yourShare: Number(row.your_share) || 0,
+  }));
 }
