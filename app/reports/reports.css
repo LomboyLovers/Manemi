@@ -315,3 +315,27 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* DASH-05 / DASH-06: CSV and PDF side by side. */
+.mn-reports-exports {
+  display: inline-flex;
+  gap: 8px;
+}
+.mn-reports-export.is-secondary {
+  background: var(--mn-surface-2, #26262c);
+  border: 1px solid var(--mn-border, #3a3a43);
+  color: var(--mn-text, #f5f5f7);
+}
+.mn-reports-export {
+  transition: transform 140ms cubic-bezier(0.2, 0, 0, 1), background-color 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+.mn-reports-export:not(:disabled):active {
+  transform: scale(0.97);
+}
+@media print {
+  .mn-reports-exports { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mn-reports-export { transition: none; }
+  .mn-reports-export:not(:disabled):active { transform: none; }
+}

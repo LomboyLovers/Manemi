@@ -31,7 +31,14 @@ type Group = {
   isArchived?: boolean | null;
 };
 
-type GroupMember = { userId: string; name: string; avatarUrl?: string | null };
+type GroupMember = {
+  userId: string;
+  name: string;
+  avatarUrl?: string | null;
+  /** GROUP-03: shown next to the name so everyone can tell who runs the group. */
+  role?: "owner" | "admin" | "member";
+  userCode?: string | null;
+};
 type ExpenseSplit = {
   expenseId: string;
   userId: string;
@@ -205,7 +212,7 @@ export default function GroupDetailsPage() {
       // Names and split participants depend on the results above.
       const [usersResult, splitsResult] = await Promise.all([
         memberIds.length
-          ? supabase.from("User").select("userId, name, avatarUrl").in("userId", memberIds)
+          ? supabase.from("User").select("userId, name, avatarUrl, userCode").in("userId", memberIds)
           : Promise.resolve({ data: [], error: null }),
         expenseIds.length
           ? supabase
@@ -218,6 +225,10 @@ export default function GroupDetailsPage() {
 
       let namesById = new Map<string, string>();
       const avatarsById = new Map<string, string | null>();
+      const codesById = new Map<string, string | null>();
+      const rolesById = new Map(
+        (memberRows ?? []).map((row) => [row.userId as string, String(row.role) as GroupMember["role"]]),
+      );
       if (usersResult.error) {
         console.warn("Unable to load member names:", usersResult.error.message);
       } else {
@@ -229,12 +240,15 @@ export default function GroupDetailsPage() {
         );
         for (const user of usersResult.data ?? []) {
           avatarsById.set(user.userId as string, (user.avatarUrl as string | null) ?? null);
+          codesById.set(user.userId as string, (user.userCode as string | null) ?? null);
         }
       }
       setMembers(
         memberIds.map((id) => ({
           userId: id,
           avatarUrl: avatarsById.get(id) ?? null,
+          role: rolesById.get(id) ?? "member",
+          userCode: codesById.get(id) ?? null,
           name:
             namesById.get(id) ||
             (id === me.id
@@ -1061,13 +1075,14 @@ export default function GroupDetailsPage() {
                             )}
                           </div>
 
-                          <h2 className="md-balances-heading">Everyone</h2>
+                          <h2 className="md-balances-heading">Members · {members.length}</h2>
                           <div className="md-balances">
                             {[...memberBalances]
                               .sort((a, b) => b.net - a.net)
                               .map((member) => {
                                 const isMe = member.userId === currentUserId;
                                 const label = isMe ? "You" : memberName(member.userId);
+                                const info = members.find((item) => item.userId === member.userId);
                                 const cls = isZero(member.net)
                                   ? "md-balance-zero"
                                   : member.net > 0
@@ -1079,7 +1094,15 @@ export default function GroupDetailsPage() {
                                       <Avatar name={label} url={memberAvatar(member.userId)} />
                                     </span>
                                     <div className="md-balance-name">
-                                      <strong>{label}</strong>
+                                      <strong>
+                                        {label}
+                                        {info?.role === "owner" || info?.role === "admin" ? (
+                                          <span className={`md-role-badge is-${info.role}`}>
+                                            {info.role === "owner" ? "Owner" : "Admin"}
+                                          </span>
+                                        ) : null}
+                                      </strong>
+                                      {info?.userCode && <span className="md-member-code">@{info.userCode}</span>}
                                       <small>
                                         <DirectionIcon
                                           dir={isZero(member.net) ? "done" : member.net > 0 ? "in" : "out"}

@@ -14,12 +14,13 @@ import { loadGroupsDataCached, type CurrentUser, type GroupSummary } from "@/lib
 import { reportExpenses, type ReportRow } from "@/lib/manemi/search";
 import { personalAsReportRows, personalInRange } from "@/lib/manemi/personal";
 import { useDataVersion } from "@/lib/manemi/events";
+import { expensesToCsv, exportFileName } from "@/lib/manemi/csv";
 import "./reports.css";
 
 // Pattern 9 (Analytics / Reporting): filter by group and period, see totals,
-// spending by category, the itemized list and balances, export as PDF.
+// spending by category, the itemized list and balances, export as CSV or PDF.
 // SRS DASH-02 (period summary), DASH-03 (by category), DASH-04 (date ranges),
-// DASH-05 (PDF export).
+// DASH-05 (CSV export), DASH-06 (PDF export).
 
 type Period = "week" | "month" | "30d" | "year" | "custom";
 
@@ -138,16 +139,61 @@ export default function ReportsPage() {
         : groups.find((group) => group.id === groupId)?.name ?? "Group";
   const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  /** DASH-05: every expense in the current filters (not just this page). */
+  function exportCsv() {
+    const csv = expensesToCsv(rows, (key) => CATEGORY_META[categoryKey(key)].label);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = exportFileName(groupName, range.from, range.to, "csv");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  /** DASH-06: the browser's "Save as PDF" names the file after the page title. */
+  function exportPdf() {
+    const previous = document.title;
+    document.title = exportFileName(groupName, range.from, range.to, "pdf").replace(/\.pdf$/, "");
+    const restore = () => {
+      document.title = previous;
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    window.print();
+  }
+
   return (
     <main className="mn-app-page mn-reports">
       <div className="mn-reports-content">
         <PageHeader user={user} showBell={false}>
-          <button type="button" className="mn-reports-export" onClick={() => window.print()} disabled={loading || !rows.length}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-            </svg>
-            Export PDF
-          </button>
+          <div className="mn-reports-exports">
+            <button
+              type="button"
+              className="mn-reports-export is-secondary"
+              onClick={exportCsv}
+              disabled={loading || !rows.length}
+              title="Download every expense in this report as a spreadsheet file"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+              </svg>
+              CSV
+            </button>
+            <button
+              type="button"
+              className="mn-reports-export"
+              onClick={exportPdf}
+              disabled={loading || !rows.length}
+              title="Save this report as a PDF (choose Save as PDF in the print window)"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+              </svg>
+              PDF
+            </button>
+          </div>
         </PageHeader>
 
         <header className="mn-reports-heading">
