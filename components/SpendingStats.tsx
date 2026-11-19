@@ -8,11 +8,10 @@ import { personalAsReportRows, personalInRange } from "@/lib/manemi/personal";
 import { peso } from "@/lib/manemi/format";
 import { useDataVersion } from "@/lib/manemi/events";
 import {
+  dailyComparison,
   earliestNeeded,
   niceScale,
-  periodChange,
   smoothPath,
-  spendingSeries,
   type SpendingPeriod,
 } from "@/lib/manemi/spending";
 import "./spending-stats.css";
@@ -20,20 +19,29 @@ import "./spending-stats.css";
 const toIsoDay = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-const CHART_HEIGHT = 228;
-// Room for the y-axis title + labels on the left and the x labels + title below.
-const PAD = { top: 12, right: 12, bottom: 52, left: 70 };
+const CHART_HEIGHT = 220;
+// Room for the ₱ labels on the left and the day labels below.
+const PAD = { top: 16, right: 10, bottom: 30, left: 44 };
+/** Month view: label and grid line every week (1, 8, 15, 22, 29). */
+const MONTH_MARKS = [0, 7, 14, 21, 28];
 
-/** Home: how much you spent this week / month, compared with the one before, plus a trend line. */
+const compact = new Intl.NumberFormat("en-PH", { notation: "compact", maximumFractionDigits: 1 });
+const axisPeso = (cents: number) => (cents === 0 ? "₱0" : `₱${compact.format(cents / 100)}`);
+
+/**
+ * Home: what you've spent this week / month, day by day, with last week /
+ * month as a gray line behind it (toggle). Styled as a smooth area chart.
+ */
 export default function SpendingStats({ userId }: { userId: string }) {
   const [period, setPeriod] = useState<SpendingPeriod>("week");
+  const [compare, setCompare] = useState(true);
   const [rows, setRows] = useState<ReportRow[] | null>(null);
   const [error, setError] = useState("");
   const [active, setActive] = useState<number | null>(null);
   const [width, setWidth] = useState(0);
   const chartRef = useRef<HTMLDivElement>(null);
   const dataVersion = useDataVersion();
-  const id = useId();
+  const id = useId().replace(/:/g, "");
 
   useEffect(() => {
     let alive = true;
@@ -61,48 +69,55 @@ export default function SpendingStats({ userId }: { userId: string }) {
     return () => observer.disconnect();
   }, []);
 
-  const points = useMemo(() => spendingSeries(rows ?? [], period, new Date()), [rows, period]);
-  const change = periodChange(points);
-  const current = points[points.length - 1];
-  const previous = points[points.length - 2];
+  const data = useMemo(() => dailyComparison(rows ?? [], period, new Date()), [rows, period]);
+  const { slots, today } = data;
   const unit = period === "week" ? "week" : "month";
-  const average = points.reduce((sum, point) => sum + point.cents, 0) / points.length;
-  const hasAny = points.some((point) => point.cents > 0);
+  const hasAny = data.currentTotal > 0 || data.previousTotal > 0;
 
-  // Geometry
-  const scale = niceScale(Math.max(...points.map((point) => point.cents)));
+  // Geometry. The scale covers both lines so toggling Compare never rescales.
+  const scale = niceScale(Math.max(...slots.map((slot) => Math.max(slot.current ?? 0, slot.previous ?? 0))));
   const plotWidth = Math.max(width - PAD.left - PAD.right, 1);
   const plotHeight = CHART_HEIGHT - PAD.top - PAD.bottom;
-  // Each period gets an equal slot; its point sits in the middle (like the reference: Mon is inset from the axis).
-  const slot = plotWidth / Math.max(points.length, 1);
-  const x = (index: number) => PAD.left + slot * (index + 0.5);
-  const y = (cents: number) => PAD.top + plotHeight - (cents / scale.max) * plotHeight;
-  const ticks = [0, 1, 2, 3, 4].map((step) => step * scale.step);
-  const path = smoothPath(points.map((point, index) => ({ x: x(index), y: y(point.cents) })));
-  const axisBottom = PAD.top + plotHeight;
-  const shown = active ?? points.length - 1;
+  const baseline = PAD.top + plotHeight;
+  const x = (index: number) => PAD.left + (plotWidth * index) / Math.max(slots.length - 1, 1);
+  const y = (cents: number) => baseline - (cents / scale.max) * plotHeight;
 
-  function pointFromPointer(clientX: number) {
+  const line = (values: Array<number | null>) =>
+    values.flatMap((value, index) => (value === null ? [] : [{ x: x(index), y: y(value) }]));
+  const currentPoints = line(slots.map((slot) => slot.current));
+  const previousPoints = line(slots.map((slot) => slot.previous));
+  const area = (points: Array<{ x: number; y: number }>) =>
+    points.length > 1
+      ? `${smoothPath(points)} L${points[points.length - 1].x},${baseline} L${points[0].x},${baseline} Z`
+      : "";
+  const marks = period === "week" ? slots.map((_, index) => index) : MONTH_MARKS.filter((index) => index < slots.length);
+  const yTicks = [scale.max / 2, scale.max];
+
+  function slotFromPointer(clientX: number) {
     const box = chartRef.current?.getBoundingClientRect();
-    if (!box || points.length < 2) return;
-    const relative = clientX - box.left - PAD.left;
-    const index = Math.floor(relative / slot);
-    setActive(Math.min(points.length - 1, Math.max(0, index)));
+    if (!box) return;
+    const ratio = (clientX - box.left - PAD.left) / plotWidth;
+    setActive(Math.min(slots.length - 1, Math.max(0, Math.round(ratio * (slots.length - 1)))));
   }
 
-  const tone = change.cents > 0 ? "up" : change.cents < 0 ? "down" : "flat";
+  // "So far" comparison: this period up to today vs the previous one up to the same day.
+  const diff = data.currentTotal - data.previousToDate;
+  const percent = data.previousToDate > 0 ? Math.round((diff / data.previousToDate) * 100) : null;
+  const tone = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
   const changeText =
-    change.cents === 0
-      ? `Same as last ${unit}`
-      : `${peso(Math.abs(change.cents) / 100)} ${change.cents > 0 ? "more" : "less"} than last ${unit}${
-          change.percent !== null ? ` (${change.percent > 0 ? "+" : ""}${change.percent}%)` : ""
+    diff === 0
+      ? `Same as this time last ${unit}`
+      : `${peso(Math.abs(diff) / 100)} ${diff > 0 ? "more" : "less"} than this time last ${unit}${
+          percent !== null ? ` (${percent > 0 ? "+" : ""}${percent}%)` : ""
         }`;
+
+  const shown = active === null ? null : slots[active];
 
   return (
     <section className="mn-spend" aria-labelledby={`${id}-title`}>
       <div className="mn-spend-head">
         <h2 id={`${id}-title`}>Your spending</h2>
-        <div className="mn-spend-toggle" role="group" aria-label="Compare by">
+        <div className="mn-spend-toggle" role="group" aria-label="Show">
           {(["week", "month"] as const).map((value) => (
             <button
               key={value}
@@ -128,8 +143,8 @@ export default function SpendingStats({ userId }: { userId: string }) {
         <>
           <div className="mn-spend-summary" aria-live="polite" aria-busy={rows === null}>
             <div>
-              <span className="mn-spend-label">This {unit}</span>
-              <strong className="mn-spend-value">{rows === null ? "—" : peso((current?.cents ?? 0) / 100)}</strong>
+              <span className="mn-spend-label">This {unit} so far</span>
+              <strong className="mn-spend-value">{rows === null ? "—" : peso(data.currentTotal / 100)}</strong>
               {rows !== null && (
                 <span className={`mn-spend-change is-${tone}`}>
                   <span aria-hidden="true">{tone === "up" ? "▲" : tone === "down" ? "▼" : "•"}</span> {changeText}
@@ -139,13 +154,31 @@ export default function SpendingStats({ userId }: { userId: string }) {
             <dl className="mn-spend-facts">
               <div>
                 <dt>Last {unit}</dt>
-                <dd>{rows === null ? "—" : peso((previous?.cents ?? 0) / 100)}</dd>
+                <dd>{rows === null ? "—" : peso(data.previousTotal / 100)}</dd>
               </div>
               <div>
-                <dt>{points.length}-{unit} average</dt>
-                <dd>{rows === null ? "—" : peso(Math.round(average) / 100)}</dd>
+                <dt>Daily average</dt>
+                <dd>{rows === null ? "—" : peso(Math.round(data.currentTotal / data.daysSoFar) / 100)}</dd>
               </div>
             </dl>
+          </div>
+
+          <div className="mn-spend-legend">
+            <span className="mn-spend-key is-current">
+              <span className="mn-spend-swatch" aria-hidden="true" /> This {unit}
+            </span>
+            <button
+              type="button"
+              className="mn-spend-compare"
+              aria-pressed={compare}
+              title={compare ? `Hide last ${unit}` : `Compare with last ${unit}`}
+              onClick={() => setCompare((value) => !value)}
+            >
+              <span className="mn-spend-swatch is-previous" aria-hidden="true" />
+              Last {unit}
+              <span className="mn-visually-hidden"> (compare)</span>
+              <span className="mn-spend-switch" aria-hidden="true" />
+            </button>
           </div>
 
           <div
@@ -153,115 +186,138 @@ export default function SpendingStats({ userId }: { userId: string }) {
             className="mn-spend-chart"
             tabIndex={hasAny ? 0 : -1}
             role="img"
-            aria-label={`Your spending per ${unit}, last ${points.length} ${unit}s. Use the arrow keys to read each ${unit}.`}
-            onPointerMove={(event) => pointFromPointer(event.clientX)}
-            onPointerDown={(event) => pointFromPointer(event.clientX)}
+            aria-label={`Your spending each day this ${unit}${compare ? ` and last ${unit}` : ""}. Use the arrow keys to read each day.`}
+            onPointerMove={(event) => slotFromPointer(event.clientX)}
+            onPointerDown={(event) => slotFromPointer(event.clientX)}
             onPointerLeave={() => setActive(null)}
             onBlur={() => setActive(null)}
             onKeyDown={(event) => {
               if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
                 event.preventDefault();
                 const step = event.key === "ArrowLeft" ? -1 : 1;
-                setActive((value) => Math.min(points.length - 1, Math.max(0, (value ?? points.length - 1) + step)));
+                setActive((value) => Math.min(slots.length - 1, Math.max(0, (value ?? today) + step)));
               } else if (event.key === "Home" || event.key === "End") {
                 event.preventDefault();
-                setActive(event.key === "Home" ? 0 : points.length - 1);
+                setActive(event.key === "Home" ? 0 : slots.length - 1);
               }
             }}
           >
             {width > 0 && (
               <svg width={width} height={CHART_HEIGHT} aria-hidden="true" focusable="false">
-                {/* Horizontal gridlines with y tick marks and labels */}
-                {ticks.map((tick) => (
-                  <g key={tick}>
-                    {tick > 0 && <line className="mn-spend-grid" x1={PAD.left} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} />}
-                    <line className="mn-spend-tick" x1={PAD.left - 5} x2={PAD.left} y1={y(tick)} y2={y(tick)} />
-                    <text className="mn-spend-axis" x={PAD.left - 9} y={y(tick)} textAnchor="end" dominantBaseline="middle">
-                      {tick === 0 ? "₱0" : `₱${new Intl.NumberFormat("en-PH", { notation: "compact", maximumFractionDigits: 1 }).format(tick / 100)}`}
+                <defs>
+                  <linearGradient id={`${id}-stroke`} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#8b3dff" />
+                    <stop offset="100%" stopColor="#ff5fa2" />
+                  </linearGradient>
+                  <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a04dff" stopOpacity="0.38" />
+                    <stop offset="100%" stopColor="#a04dff" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+
+                {/* Vertical grid lines and day labels */}
+                {marks.map((index) => (
+                  <g key={index}>
+                    <line className="mn-spend-vgrid" x1={x(index)} x2={x(index)} y1={PAD.top} y2={baseline} />
+                    <text
+                      className={`mn-spend-axis ${index === (active ?? today) ? "is-active" : ""}`}
+                      x={x(index)}
+                      y={baseline + 20}
+                      textAnchor={index === 0 ? "start" : index === slots.length - 1 ? "end" : "middle"}
+                    >
+                      {slots[index].label}
                     </text>
                   </g>
                 ))}
-                {/* Axes */}
-                <line className="mn-spend-axis-line" x1={PAD.left} x2={PAD.left} y1={PAD.top} y2={axisBottom} />
-                <line className="mn-spend-axis-line" x1={PAD.left} x2={width - PAD.right} y1={axisBottom} y2={axisBottom} />
-                {/* X tick marks and labels */}
-                {points.map((point, index) => {
-                  const thin = period === "week" && plotWidth < 380 && index % 2 !== (points.length - 1) % 2;
-                  return (
-                    <g key={point.start.toISOString()}>
-                      <line className="mn-spend-tick" x1={x(index)} x2={x(index)} y1={axisBottom} y2={axisBottom + 5} />
-                      {!thin && (
-                        <text className={`mn-spend-axis ${index === shown ? "is-active" : ""}`} x={x(index)} y={axisBottom + 20} textAnchor="middle">
-                          {point.label}
-                        </text>
-                      )}
-                    </g>
-                  );
-                })}
-                {/* Axis titles */}
-                <text className="mn-spend-axis-title" x={PAD.left + plotWidth / 2} y={CHART_HEIGHT - 6} textAnchor="middle">
-                  {period === "week" ? "Week starting" : "Month"}
-                </text>
-                <text
-                  className="mn-spend-axis-title"
-                  x={0}
-                  y={0}
-                  textAnchor="middle"
-                  transform={`translate(14 ${PAD.top + plotHeight / 2}) rotate(-90)`}
-                >
-                  Your share (₱)
-                </text>
-                {active !== null && (
-                  <line className="mn-spend-crosshair" x1={x(shown)} x2={x(shown)} y1={PAD.top} y2={axisBottom} />
-                )}
-                <path className="mn-spend-line" d={path} />
-                {points.map((point, index) => (
-                  <circle
-                    key={point.start.toISOString()}
-                    className={`mn-spend-point ${index === shown && active !== null ? "is-active" : ""}`}
-                    cx={x(index)}
-                    cy={y(point.cents)}
-                    r={index === shown && active !== null ? 5.5 : 3.5}
-                  />
+                {/* ₱ labels (no horizontal lines, like the reference) */}
+                {yTicks.map((tick) => (
+                  <text key={tick} className="mn-spend-axis" x={PAD.left - 10} y={y(tick)} textAnchor="end" dominantBaseline="middle">
+                    {axisPeso(tick)}
+                  </text>
                 ))}
+                <text className="mn-spend-axis" x={PAD.left - 10} y={baseline} textAnchor="end" dominantBaseline="middle">
+                  ₱0
+                </text>
+                <line className="mn-spend-baseline" x1={PAD.left} x2={width - PAD.right} y1={baseline} y2={baseline} />
+
+                <g key={period} className="mn-spend-series">
+                  {/* Last week / month: gray, behind */}
+                  <g className={`mn-spend-previous ${compare ? "" : "is-hidden"}`}>
+                    <path className="mn-spend-previous-fill" d={area(previousPoints)} />
+                    <path className="mn-spend-previous-line" d={smoothPath(previousPoints)} />
+                  </g>
+                  {/* This week / month */}
+                  <path d={area(currentPoints)} fill={`url(#${id}-fill)`} />
+                  <path className="mn-spend-line" d={smoothPath(currentPoints)} stroke={`url(#${id}-stroke)`} />
+                  {currentPoints.length > 0 && active === null && (
+                    <circle className="mn-spend-today" cx={x(today)} cy={y(slots[today]?.current ?? 0)} r={4.5} />
+                  )}
+                </g>
+
+                {active !== null && shown && (
+                  <g>
+                    <line className="mn-spend-crosshair" x1={x(active)} x2={x(active)} y1={PAD.top} y2={baseline} />
+                    {compare && shown.previous !== null && (
+                      <circle className="mn-spend-dot is-previous" cx={x(active)} cy={y(shown.previous)} r={4} />
+                    )}
+                    {shown.current !== null && <circle className="mn-spend-dot" cx={x(active)} cy={y(shown.current)} r={5} />}
+                  </g>
+                )}
               </svg>
             )}
-            {width > 0 && rows !== null && hasAny && active !== null && (
+            {width > 0 && rows !== null && hasAny && shown && (
               <div
                 className="mn-spend-tooltip"
                 style={{
-                  left: Math.min(Math.max(x(shown), 70), width - 70),
-                  top: Math.max(y(points[shown]?.cents ?? 0) - 12, 0),
+                  left: Math.min(Math.max(x(active ?? 0), 84), width - 84),
+                  top: PAD.top,
                 }}
                 aria-hidden="true"
               >
-                <span>{points[shown]?.longLabel}</span>
-                <strong>{peso((points[shown]?.cents ?? 0) / 100)}</strong>
+                <span className="mn-spend-tip-row">
+                  <i className="mn-spend-swatch" />
+                  {shown.currentLabel ?? "—"}
+                  <strong>{shown.current === null ? (shown.currentLabel ? "Not yet" : "—") : peso(shown.current / 100)}</strong>
+                </span>
+                {compare && (
+                  <span className="mn-spend-tip-row is-previous">
+                    <i className="mn-spend-swatch is-previous" />
+                    {shown.previousLabel ?? "—"}
+                    <strong>{shown.previous === null ? "—" : peso(shown.previous / 100)}</strong>
+                  </span>
+                )}
               </div>
             )}
             {rows !== null && !hasAny && (
-              <p className="mn-spend-empty">No spending in the last {points.length} {unit}s yet. Your share of new expenses will show here.</p>
+              <p className="mn-spend-empty">
+                No spending this {unit} or last {unit} yet. Your share of new expenses will show here.
+              </p>
             )}
           </div>
 
-          {/* The same numbers as a table, for screen readers */}
-          <table className="mn-visually-hidden">
-            <caption>Your spending per {unit}</caption>
+          {/* The same numbers as a table, for screen readers. Tables ignore
+              width: 1px, so the hiding goes on a wrapper. */}
+          <div className="mn-visually-hidden">
+          <table>
+            <caption>Your spending each day, this {unit} and last {unit}</caption>
             <thead>
               <tr>
-                <th scope="col">{period === "week" ? "Week" : "Month"}</th>
-                <th scope="col">Your share</th>
+                <th scope="col">Day</th>
+                <th scope="col">This {unit}</th>
+                <th scope="col">Last {unit}</th>
               </tr>
             </thead>
             <tbody>
-              {points.map((point) => (
-                <tr key={point.start.toISOString()}>
-                  <th scope="row">{point.longLabel}</th>
-                  <td>{peso(point.cents / 100)}</td>
+              {slots.map((slot, index) => (
+                <tr key={index}>
+                  <th scope="row">{slot.label}</th>
+                  <td>{slot.current === null ? "—" : peso(slot.current / 100)}</td>
+                  <td>{slot.previous === null ? "—" : peso(slot.previous / 100)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
           <p className="mn-spend-note">
             Your share of group expenses plus your personal expenses, in pesos.{" "}
             <Link href="/personal">Personal expenses</Link>

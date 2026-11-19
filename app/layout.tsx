@@ -20,6 +20,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${inter.variable} h-full antialiased`}
+      // Browsers and extensions add attributes here before React loads (e.g.
+      // Chrome on iPhone adds __gcrremoteframetoken). Ignore those on this tag
+      // only; mismatches anywhere else in the app are still reported.
+      suppressHydrationWarning
     >
       <body className={`${inter.className} min-h-full flex flex-col`}>{children}</body>
     </html>

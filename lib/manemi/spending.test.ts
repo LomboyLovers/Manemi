@@ -1,7 +1,7 @@
 // Run with: node --test --experimental-strip-types lib/manemi/spending.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { niceScale, periodChange, periodStart, spendingSeries } from "./spending.ts";
+import { dailyComparison, earliestNeeded, niceScale, periodStart } from "./spending.ts";
 
 // Thursday, Nov 19 2026, 11 PM local time
 const now = new Date(2026, 10, 19, 23, 0);
@@ -13,41 +13,51 @@ test("weeks start on Monday", () => {
   assert.equal(periodStart("month", now, 2).toDateString(), new Date(2026, 8, 1).toDateString());
 });
 
-test("weekly series: 8 weeks, oldest first, your share in pesos only", () => {
+test("weekly: Mon–Sun this week next to last week, pesos only, stops at today", () => {
   const rows = [
-    { date: at(2026, 11, 16, 0), yourShare: 100, currency: "PHP" }, // Monday this week
-    { date: at(2026, 11, 19), yourShare: 50.5, currency: "PHP" },
-    { date: at(2026, 11, 15, 23), yourShare: 200, currency: "PHP" }, // Sunday last week
+    { date: at(2026, 11, 16, 0), yourShare: 100, currency: "PHP" }, // Mon this week, midnight
+    { date: at(2026, 11, 19), yourShare: 50.5, currency: "PHP" }, // Thu (today)
+    { date: at(2026, 11, 19, 8), yourShare: 20, currency: "PHP" }, // Thu again
+    { date: at(2026, 11, 15, 23), yourShare: 200, currency: "PHP" }, // Sun last week
+    { date: at(2026, 11, 11), yourShare: 30, currency: "PHP" }, // Wed last week
     { date: at(2026, 11, 18), yourShare: 999, currency: "USD" }, // not pesos
-    { date: at(2026, 9, 1), yourShare: 70, currency: "PHP" }, // older than 8 weeks
+    { date: at(2026, 11, 2), yourShare: 70, currency: "PHP" }, // two weeks ago
   ];
-  const series = spendingSeries(rows, "week", now);
-  assert.equal(series.length, 8);
-  assert.equal(series[7].label, "Nov 16");
-  assert.equal(series[7].cents, 15050);
-  assert.equal(series[6].cents, 20000);
-  assert.equal(series.reduce((sum, point) => sum + point.cents, 0), 35050);
+  const week = dailyComparison(rows, "week", now);
+  assert.deepEqual(week.slots.map((slot) => slot.label), ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+  assert.equal(week.today, 3);
+  assert.deepEqual(week.slots.map((slot) => slot.current), [10000, 0, 0, 7050, null, null, null]);
+  assert.deepEqual(week.slots.map((slot) => slot.previous), [0, 0, 3000, 0, 0, 0, 20000]);
+  assert.equal(week.currentTotal, 17050);
+  assert.equal(week.previousTotal, 23000);
+  assert.equal(week.previousToDate, 3000); // Mon–Thu last week
+  assert.equal(week.daysSoFar, 4);
+  assert.equal(week.slots[3].currentLabel, "Thu, Nov 19");
+  assert.equal(week.slots[3].previousLabel, "Thu, Nov 12");
 });
 
-test("monthly series: 6 months ending this month", () => {
+test("monthly: days 1–31, shorter month has no extra days", () => {
   const rows = [
     { date: at(2026, 11, 2), yourShare: 300, currency: "PHP" },
     { date: at(2026, 10, 31), yourShare: 120, currency: "PHP" },
-    { date: at(2026, 6, 15), yourShare: 80, currency: "PHP" },
-    { date: at(2026, 5, 31), yourShare: 1, currency: "PHP" }, // before the window
+    { date: at(2026, 10, 2), yourShare: 5, currency: "PHP" },
   ];
-  const series = spendingSeries(rows, "month", now);
-  assert.deepEqual(series.map((point) => point.label), ["Jun", "Jul", "Aug", "Sep", "Oct", "Nov"]);
-  assert.deepEqual(series.map((point) => point.cents), [8000, 0, 0, 0, 12000, 30000]);
-  assert.equal(series[5].longLabel, "November 2026");
+  const month = dailyComparison(rows, "month", now);
+  assert.equal(month.slots.length, 31); // October has 31, November 30
+  assert.equal(month.today, 18); // Nov 19
+  assert.equal(month.slots[1].current, 30000);
+  assert.equal(month.slots[1].previous, 500);
+  assert.equal(month.slots[30].previous, 12000); // Oct 31
+  assert.equal(month.slots[30].current, null); // no Nov 31
+  assert.equal(month.slots[30].currentLabel, null);
+  assert.equal(month.previousToDate, 500);
+  assert.equal(month.currentTotal, 30000);
 });
 
-test("change vs the previous period", () => {
-  const points = (a: number, b: number) =>
-    [a, b].map((cents) => ({ start: new Date(), label: "", longLabel: "", cents }));
-  assert.deepEqual(periodChange(points(10000, 12500)), { cents: 2500, percent: 25 });
-  assert.deepEqual(periodChange(points(10000, 5000)), { cents: -5000, percent: -50 });
-  assert.deepEqual(periodChange(points(0, 5000)), { cents: 5000, percent: null });
+test("loads from the start of last week or last month, whichever is earlier", () => {
+  assert.equal(earliestNeeded(now).toDateString(), new Date(2026, 9, 1).toDateString());
+  // Early in a month, last week can start before last month does not: Mar 2 2026 (Mon)
+  assert.equal(earliestNeeded(new Date(2026, 2, 2, 9)).toDateString(), new Date(2026, 1, 1).toDateString());
 });
 
 test("axis uses round steps", () => {

@@ -1,4 +1,4 @@
-/* Home: "Your spending" stats card (week / month comparison + trend line) */
+/* Home: "Your spending" stats card (this week / month day by day, last one in gray) */
 .mn-spend {
   margin-bottom: 36px;
   padding: 20px 18px 16px;
@@ -104,9 +104,86 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.mn-spend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--mn-muted, #a8a8b3);
+}
+.mn-spend-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.mn-spend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #8b3dff, #ff5fa2);
+  flex: none;
+}
+.mn-spend-swatch.is-previous {
+  background: #6b6876;
+}
+.mn-spend-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mn-muted, #a8a8b3);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms cubic-bezier(0.2, 0, 0, 1), color 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+.mn-spend-compare[aria-pressed="true"] {
+  color: var(--mn-text, #f5f5f7);
+  border-color: #4a4855;
+}
+.mn-spend-compare:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+/* Small on/off switch inside the Compare chip */
+.mn-spend-switch {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0 8px 0 2px;
+  border-radius: 999px;
+  background: #3a3a43;
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.mn-spend-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f5f5f7;
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+.mn-spend-compare[aria-pressed="true"] .mn-spend-switch {
+  background: #8b3dff;
+}
+.mn-spend-compare[aria-pressed="true"] .mn-spend-switch::after {
+  transform: translateX(14px);
+}
 .mn-spend-chart {
   position: relative;
-  height: 228px;
+  height: 220px;
   border-radius: 12px;
   touch-action: pan-y;
   cursor: crosshair;
@@ -115,19 +192,17 @@
   display: block;
   overflow: visible;
 }
-.mn-spend-grid {
-  stroke: #2c2c34;
+.mn-spend-chart:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+.mn-spend-vgrid {
+  stroke: #34333d;
   stroke-width: 1;
 }
-.mn-spend-axis-line,
-.mn-spend-tick {
-  stroke: #6e6e78;
-  stroke-width: 1.25;
-}
-.mn-spend-axis-title {
-  fill: var(--mn-muted, #a8a8b3);
-  font-size: 13px;
-  font-weight: 600;
+.mn-spend-baseline {
+  stroke: #44434d;
+  stroke-width: 1;
 }
 .mn-spend-axis {
   fill: var(--mn-tertiary, #8a8a95);
@@ -139,51 +214,80 @@
   font-weight: 600;
 }
 .mn-spend-crosshair {
-  stroke: #4a4a55;
+  stroke: #6b6876;
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
 .mn-spend-line {
   fill: none;
-  stroke: #a77bff;
   stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.mn-spend-point {
-  fill: #a77bff;
-  stroke: var(--mn-surface, #1c1c21);
-  stroke-width: 1.5;
+/* Last week / month: gray and quieter, so it reads as background */
+.mn-spend-previous {
+  transition: opacity 220ms cubic-bezier(0.2, 0, 0, 1);
 }
-.mn-spend-point.is-active {
-  stroke: #fff;
+.mn-spend-previous.is-hidden {
+  opacity: 0;
+}
+.mn-spend-previous-line {
+  fill: none;
+  stroke: #6b6876;
   stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.mn-spend-previous-fill {
+  fill: #6b6876;
+  opacity: 0.12;
+}
+.mn-spend-today,
+.mn-spend-dot {
+  fill: #ff5fa2;
+  stroke: var(--mn-surface, #1c1c21);
+  stroke-width: 2;
+}
+.mn-spend-dot {
+  fill: #c98bff;
+  stroke: #fff;
+}
+.mn-spend-dot.is-previous {
+  fill: #6b6876;
+  stroke: var(--mn-surface, #1c1c21);
 }
 .mn-spend-tooltip {
   position: absolute;
   transform: translate(-50%, -100%);
   display: grid;
-  gap: 1px;
-  padding: 6px 10px;
+  gap: 4px;
+  padding: 8px 10px;
   border: 1px solid #3a3a43;
   border-radius: 10px;
   background: #25252b;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
   pointer-events: none;
   white-space: nowrap;
-  text-align: center;
 }
-.mn-spend-tooltip span {
+.mn-spend-tip-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
   color: var(--mn-muted, #a8a8b3);
   font-size: 12px;
 }
-.mn-spend-tooltip strong {
+.mn-spend-tip-row strong {
+  color: var(--mn-text, #f5f5f7);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
+.mn-spend-tip-row.is-previous strong {
+  color: #b9b6c0;
+}
 .mn-spend-empty {
   position: absolute;
-  inset: 30% 12px auto 70px;
+  inset: 30% 12px auto 44px;
   margin: 0;
   color: var(--mn-muted, #a8a8b3);
   font-size: 14px;
@@ -210,5 +314,24 @@
 @media (prefers-reduced-motion: no-preference) {
   .mn-spend-toggle button {
     transition: background-color 150ms ease, color 150ms ease;
+  }
+  /* New period: the lines rise in. Same period, new data: they reshape smoothly. */
+  .mn-spend-series {
+    animation: mn-spend-in 320ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+  .mn-spend-series path {
+    transition: d 360ms cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+@keyframes mn-spend-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mn-spend-previous,
+  .mn-spend-compare,
+  .mn-spend-switch,
+  .mn-spend-switch::after {
+    transition: none;
   }
 }

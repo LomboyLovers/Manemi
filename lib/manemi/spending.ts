@@ -1,20 +1,35 @@
-// Your spending per week or month, for the home stats card.
-// "Spending" is your share of each expense (what you used), in pesos.
+// Your spending this week / month, day by day, against the one before, for
+// the home stats card. "Spending" is your share of each expense (what you
+// used), in pesos.
 
 export type SpendingPeriod = "week" | "month";
 
-export type SpendingPoint = {
-  /** Local midnight that starts the period. */
-  start: Date;
-  /** Short axis label: "Nov 10" (week of) or "Nov" (month). */
+/** One x position on the chart: a weekday (Mon–Sun) or a day of the month (1–31). */
+export type DaySlot = {
+  /** Axis label: "Mon" or "1". */
   label: string;
-  /** Longer label for tooltips and the table: "Week of Nov 10" / "November 2026". */
-  longLabel: string;
-  cents: number;
+  /** This period's day ("Wed, Nov 19"), or null if this month is shorter. */
+  currentLabel: string | null;
+  /** Your share that day, in cents. null = hasn't happened yet (or no such day). */
+  current: number | null;
+  /** The previous period's matching day ("Wed, Nov 12"), or null if it had no such day. */
+  previousLabel: string | null;
+  previous: number | null;
 };
 
-/** Weeks shown on the chart; months shown on the chart. */
-export const PERIODS_SHOWN: Record<SpendingPeriod, number> = { week: 8, month: 6 };
+export type DailyComparison = {
+  slots: DaySlot[];
+  /** Index of today; the colored line ends here. */
+  today: number;
+  /** This period so far. */
+  currentTotal: number;
+  /** The whole previous period. */
+  previousTotal: number;
+  /** The previous period up to the same day (fair "so far" comparison). */
+  previousToDate: number;
+  /** Days of this period so far, including today. */
+  daysSoFar: number;
+};
 
 /** Monday 00:00 of the week containing `date` (same rule as the rest of the app). */
 export function startOfWeek(date: Date): Date {
@@ -33,60 +48,65 @@ export function periodStart(period: SpendingPeriod, now: Date, offset = 0): Date
   return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - offset * 7);
 }
 
-/** Earliest date the card needs, covering both views. */
+/** Earliest date the card needs, covering both views (start of last week or last month). */
 export function earliestNeeded(now: Date): Date {
-  const weeks = periodStart("week", now, PERIODS_SHOWN.week - 1);
-  const months = periodStart("month", now, PERIODS_SHOWN.month - 1);
-  return weeks < months ? weeks : months;
+  const week = periodStart("week", now, 1);
+  const month = periodStart("month", now, 1);
+  return week < month ? week : month;
 }
 
-const SHORT = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" });
-const MONTH = new Intl.DateTimeFormat("en-PH", { month: "short" });
-const MONTH_LONG = new Intl.DateTimeFormat("en-PH", { month: "long", year: "numeric" });
+const DAY_LABEL = new Intl.DateTimeFormat("en-PH", { weekday: "short", month: "short", day: "numeric" });
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const daysIn = (monthStart: Date) => new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 
 /**
- * Totals your share per period, oldest first, ending with the current period.
+ * This week (Mon–Sun) or month (1–31) day by day, next to the previous one.
  * Only peso expenses count; other currencies aren't converted.
  */
-export function spendingSeries(
+export function dailyComparison(
   rows: Array<{ date: string; yourShare: number; currency: string }>,
   period: SpendingPeriod,
   now: Date,
-  count = PERIODS_SHOWN[period],
-): SpendingPoint[] {
-  const points: SpendingPoint[] = [];
-  for (let offset = count - 1; offset >= 0; offset--) {
-    const start = periodStart(period, now, offset);
-    points.push({
-      start,
-      label: period === "week" ? SHORT.format(start) : MONTH.format(start),
-      longLabel: period === "week" ? `Week of ${SHORT.format(start)}` : MONTH_LONG.format(start),
-      cents: 0,
-    });
-  }
-  const end = periodStart(period, now, -1).getTime();
+): DailyComparison {
+  const currentStart = periodStart(period, now, 0);
+  const previousStart = periodStart(period, now, 1);
+  const currentDays = period === "week" ? 7 : daysIn(currentStart);
+  const previousDays = period === "week" ? 7 : daysIn(previousStart);
+  const count = Math.max(currentDays, previousDays);
+  const today = Math.round(
+    (new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - currentStart.getTime()) / 86_400_000,
+  );
+
+  // Your share per calendar day (local time).
+  const byDay = new Map<string, number>();
   for (const row of rows) {
     if (row.currency !== "PHP") continue;
-    const time = new Date(row.date).getTime();
-    if (!(time < end) || time < points[0].start.getTime()) continue;
-    // Latest period whose start is on or before this expense.
-    for (let index = points.length - 1; index >= 0; index--) {
-      if (time >= points[index].start.getTime()) {
-        points[index].cents += Math.round(row.yourShare * 100);
-        break;
-      }
-    }
+    const key = dayKey(new Date(row.date));
+    byDay.set(key, (byDay.get(key) ?? 0) + Math.round(row.yourShare * 100));
   }
-  return points;
-}
+  const dayAt = (start: Date, index: number) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
 
-/** Change from the previous period: cents and percent (null when last period was 0). */
-export function periodChange(points: SpendingPoint[]): { cents: number; percent: number | null } {
-  const current = points[points.length - 1]?.cents ?? 0;
-  const previous = points[points.length - 2]?.cents ?? 0;
+  const slots: DaySlot[] = [];
+  for (let index = 0; index < count; index++) {
+    const currentDay = index < currentDays ? dayAt(currentStart, index) : null;
+    const previousDay = index < previousDays ? dayAt(previousStart, index) : null;
+    slots.push({
+      label: period === "week" ? WEEKDAYS[index] : String(index + 1),
+      currentLabel: currentDay ? DAY_LABEL.format(currentDay) : null,
+      current: currentDay && index <= today ? (byDay.get(dayKey(currentDay)) ?? 0) : null,
+      previousLabel: previousDay ? DAY_LABEL.format(previousDay) : null,
+      previous: previousDay ? (byDay.get(dayKey(previousDay)) ?? 0) : null,
+    });
+  }
+  const sum = (values: Array<number | null>) => values.reduce<number>((total, value) => total + (value ?? 0), 0);
   return {
-    cents: current - previous,
-    percent: previous > 0 ? Math.round(((current - previous) / previous) * 100) : null,
+    slots,
+    today,
+    currentTotal: sum(slots.map((slot) => slot.current)),
+    previousTotal: sum(slots.map((slot) => slot.previous)),
+    previousToDate: sum(slots.slice(0, today + 1).map((slot) => slot.previous)),
+    daysSoFar: today + 1,
   };
 }
 
