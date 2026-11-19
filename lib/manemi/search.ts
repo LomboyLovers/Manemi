@@ -211,20 +211,25 @@ export async function searchActivity(
 }
 
 /**
- * Groups whose name, or one of whose expenses, matches the query.
- * Returns group ids (both queries are limited to your groups by RLS).
+ * Groups whose name, or one of whose expense titles, contains the query.
+ * One database call (search_group_ids); row-level security limits it to
+ * your groups, and personal expenses never match.
  */
-export async function searchGroupIds(supabase: Supabase, query: string): Promise<Set<string>> {
-  const pattern = `%${escapeLike(query)}%`;
-  const [byName, byExpense] = await Promise.all([
-    supabase.from("Group").select("groupId").ilike("name", pattern).limit(200),
-    supabase.from("Expense").select("groupId").not("groupId", "is", null).ilike("title", pattern).limit(500),
-  ]);
-  if (byName.error) throw new Error(`Couldn't search groups: ${byName.error.message}`);
-  if (byExpense.error) throw new Error(`Couldn't search expenses: ${byExpense.error.message}`);
-  return new Set(
-    [...(byName.data ?? []), ...(byExpense.data ?? [])].map((row: { groupId: string }) => row.groupId),
-  );
+export async function searchGroupIds(
+  supabase: Supabase,
+  query: string,
+  signal?: AbortSignal,
+): Promise<Set<string>> {
+  const request = supabase.rpc("search_group_ids", { p_query: query.trim() });
+  const { data, error } = await (signal ? request.abortSignal(signal) : request);
+  if (error) throw new Error(`Couldn't search groups: ${error.message}`);
+  return new Set(((data ?? []) as string[]).map(String));
+}
+
+/** Owners and admins move a group to another category. */
+export async function setGroupCategory(supabase: Supabase, groupId: string, category: string): Promise<void> {
+  const { error } = await supabase.rpc("set_group_category", { p_group_id: groupId, p_category: category });
+  if (error) throw new Error(error.message || "Couldn't change the category. Try again.");
 }
 
 export type ReportRow = {

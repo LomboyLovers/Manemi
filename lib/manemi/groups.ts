@@ -4,10 +4,12 @@
 //   3. groups + all rosters + all expenses
 //   4. member names + all expense split rows
 // Balances are then computed in memory by the ledger, using each expense's
-// real participants (see ledger.ts). Search and filters never hit the API.
+// real participants (see ledger.ts). Category filters run on this loaded
+// data; text search runs in the database (search.ts, search_group_ids).
 
 import type { createClient } from "@/lib/supabase/client";
 import { categoryKey, type CategoryKey } from "./format.ts";
+import { toGroupCategory, type GroupCategory } from "./groupCategories.ts";
 import {
   buildLedger,
   groupRawItems,
@@ -27,6 +29,8 @@ export type Counterparty = { userId: string; name: string; amount: number };
 export type GroupSummary = {
   id: string;
   name: string;
+  /** Travel, Roommates, Group Dinners, Events or Other (stored on the group). */
+  category: GroupCategory;
   createdAt: string;
   isCreator: boolean;
   /** Your role in the group. */
@@ -228,7 +232,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
   const [groupsResult, rosterResult, expensesResult, settlementsResult] = await Promise.all([
     supabase
       .from("Group")
-      .select("groupId, name, createdAt, createdBy, isArchived")
+      .select("groupId, name, category, createdAt, createdBy, isArchived")
       .in("groupId", groupIds)
       .order("createdAt", { ascending: false }),
     supabase.from("Group_Member").select("groupId, userId, role").in("groupId", groupIds),
@@ -407,7 +411,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
   const weekStart = startOfWeek(now);
 
   const groups: GroupSummary[] = (groupsResult.data ?? []).map(
-    (group: { groupId: string; name: string; createdAt: string; createdBy: string; isArchived: boolean }) => {
+    (group: { groupId: string; name: string; category: string | null; createdAt: string; createdBy: string; isArchived: boolean }) => {
       const expenses = ledgerByGroup.get(group.groupId) ?? [];
       const ledger = buildLedger(expenses);
       const mine = ledger.forUser(me.id);
@@ -429,6 +433,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
       return {
         id: group.groupId,
         name: group.name,
+        category: toGroupCategory(group.category),
         createdAt: group.createdAt,
         isCreator: group.createdBy === me.id,
         role: myRole(group.groupId, group.createdBy === me.id),

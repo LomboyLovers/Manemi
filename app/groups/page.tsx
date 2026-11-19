@@ -1,7 +1,8 @@
 "use client";
 
 import RawBreakdown from "@/components/RawBreakdown";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -11,15 +12,20 @@ import "./groups-compact-navigation.css";
 import "./groups-actions-sheet.css";
 import "./groups-invitations.css";
 import "./groups-balance-card.css";
+import "./groups-categories.css";
 import GroupsSkeleton from "@/components/GroupSkeleton";
 import PageHeader, { HeaderButton } from "@/components/PageHeader";
 import InviteFriendsSheet from "@/components/InviteFriendsSheet";
 import LeaveGroupDialog, { type LeaveBalance } from "@/components/LeaveGroupDialog";
-import Select from "@/components/Select";
 import Icon, { type IconName } from "@/components/Icon";
 import AppNav from "@/components/AppNav";
 import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
-import { searchGroupIds } from "@/lib/manemi/search";
+import { searchGroupIds, setGroupCategory as saveGroupCategory } from "@/lib/manemi/search";
+import {
+  GROUP_CATEGORIES,
+  groupCategoryIcon,
+  type GroupCategory,
+} from "@/lib/manemi/groupCategories";
 import { useDebounced } from "@/lib/manemi/useDebounced";
 import {
   loadGroupsDataCached,
@@ -54,6 +60,25 @@ function balanceTone(net: number) {
     : { tone: "negative", arrow: "↗", label: "You owe" };
 }
 
+type Filter = "All" | GroupCategory;
+const FILTERS: Filter[] = ["All", ...GROUP_CATEGORIES.map((category) => category.name)];
+
+const withIcon = (group: GroupSummary): GroupData => ({ ...group, icon: groupCategoryIcon(group.category) });
+
+/**
+ * Animate a layout change (filter chips) with the View Transitions API:
+ * cards that stay glide to their new place, others fade. Instant where the
+ * browser has no support or the user prefers reduced motion.
+ */
+function withViewTransition(update: () => void) {
+  const doc = document as Document & { startViewTransition?: (callback: () => void) => unknown };
+  if (!doc.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    update();
+    return;
+  }
+  doc.startViewTransition(() => flushSync(update));
+}
+
 function CustomIcon({ name, size = 20, className = "" }: CustomIconProps) {
   return (
     <Image
@@ -75,16 +100,17 @@ export default function GroupsPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [groupCategory, setGroupCategory] = useState("Travel");
+  const [groupCategory, setGroupCategory] = useState<GroupCategory>("Travel");
   const [groups, setGroups] = useState<GroupData[]>([]);
-  const [groupEmoji, setGroupEmoji] = useState<string>("plane");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createGroupError, setCreateGroupError] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [initialPageLoading, setInitialPageLoading] = useState(true);
   const [groupsError, setGroupsError] = useState("");
   const dataVersion = useDataVersion();
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [activeFilter, setActiveFilter] = useState<Filter>("All");
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState("");
   const [groupMenu, setGroupMenu] = useState<string | null>(null);
   const [archiveGroupId, setArchiveGroupId] = useState<string | null>(null);
   const [archivingGroup, setArchivingGroup] = useState(false);
@@ -103,17 +129,47 @@ export default function GroupsPage() {
   } | null>(null);
 
   const selectedGroup = groups.find((group) => group.id === groupMenu);
+  useEffect(() => setCategoryError(""), [groupMenu]);
   const archiveGroup = groups.find((group) => group.id === archiveGroupId);
 
-  const categories = [
-    { name: "Travel", icon: "plane" as IconName },
-    { name: "Roommates", icon: "home" as IconName },
-    { name: "Group Dinners", icon: "utensils" as IconName },
-    { name: "Events", icon: "party" as IconName },
-    { name: "Other", icon: "box" as IconName },
-  ];
-
   const router = useRouter();
+
+  const openGroup = useCallback((id: string) => router.push(`/groups/${id}`), [router]);
+  const prefetchGroup = useCallback((id: string) => router.prefetch(`/groups/${id}`), [router]);
+  const toggleMenu = useCallback(
+    (id: string) => setGroupMenu((open) => (open === id ? null : id)),
+    [],
+  );
+  const changeFilter = useCallback((filter: Filter) => {
+    withViewTransition(() => setActiveFilter(filter));
+  }, []);
+  const openCreate = useCallback((category?: GroupCategory) => {
+    setGroupCategory(category ?? "Travel");
+    setShowCreateModal(true);
+  }, []);
+
+  /** Owners/admins move a group to another category (saved in the database). */
+  async function changeCategory(groupId: string, category: GroupCategory) {
+    const before = groups.find((group) => group.id === groupId);
+    if (!before || before.category === category || savingCategory) return;
+    setSavingCategory(true);
+    setCategoryError("");
+    const apply = (value: GroupCategory) =>
+      setGroups((list) =>
+        list.map((group) => (group.id === groupId ? withIcon({ ...group, category: value }) : group)),
+      );
+    apply(category); // optimistic; rolled back below if the save fails
+    try {
+      await saveGroupCategory(createClient(), groupId, category);
+      setNotice(`${before.name} moved to ${category}.`);
+      notifyDataChanged();
+    } catch (error) {
+      apply(before.category);
+      setCategoryError(error instanceof Error ? error.message : "Couldn't change the category. Try again.");
+    } finally {
+      setSavingCategory(false);
+    }
+  }
 
 
   async function handleArchiveGroup() {
@@ -190,6 +246,7 @@ export default function GroupsPage() {
         },
         body: {
           name: groupName.trim(),
+          category: groupCategory,
         },
       });
 
@@ -228,7 +285,6 @@ export default function GroupsPage() {
       setShowCreateModal(false);
       setGroupName("");
       setGroupCategory("Travel");
-      setGroupEmoji("plane");
 
       notifyDataChanged();
       if (!newId)
@@ -260,7 +316,7 @@ export default function GroupsPage() {
         if (!active) return;
         if (result) {
           setUser(result.user);
-          setGroups(result.groups.map((group) => ({ ...group, icon: "users" as IconName })));
+          setGroups(result.groups.map(withIcon));
           setGroupsError(
             result.warnings.length
               ? `Some details could not be loaded: ${result.warnings.join("; ")}`
@@ -287,35 +343,78 @@ export default function GroupsPage() {
     };
   }, [dataVersion]);
 
-  // Search runs in the database (group names and expense titles), 300ms
-  // after typing stops; the cards keep their already-computed balances.
+  // Search runs in the database (search_group_ids: group names and expense
+  // titles, limited to your groups by RLS), 300ms after typing stops. Results
+  // are cached per query until data changes, and stale requests are cancelled.
   const query = useDebounced(search.trim(), 300);
   const [matchIds, setMatchIds] = useState<Set<string> | null>(null);
+  const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const searchCache = useRef(new Map<string, Set<string>>());
+  useEffect(() => {
+    searchCache.current.clear();
+  }, [dataVersion]);
   useEffect(() => {
     if (!query) {
       setMatchIds(null);
       setSearchError("");
+      setSearching(false);
       return;
     }
-    let active = true;
-    searchGroupIds(createClient(), query)
+    const key = query.toLowerCase();
+    const cached = searchCache.current.get(key);
+    if (cached) {
+      setMatchIds(cached);
+      setSearchError("");
+      setSearching(false);
+      return;
+    }
+    const controller = new AbortController();
+    setSearching(true);
+    searchGroupIds(createClient(), query, controller.signal)
       .then((ids) => {
-        if (!active) return;
+        searchCache.current.set(key, ids);
         setMatchIds(ids);
         setSearchError("");
       })
       .catch((reason: unknown) => {
-        if (active) setSearchError(reason instanceof Error ? reason.message : "Search failed. Try again.");
+        if (controller.signal.aborted) return;
+        setSearchError(reason instanceof Error ? reason.message : "Search failed. Try again.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSearching(false);
       });
-    return () => {
-      active = false;
-    };
+    return () => controller.abort();
   }, [query, dataVersion]);
+
   const visibleGroups = useMemo(
-    () => (matchIds ? groups.filter((group) => matchIds.has(group.id)) : groups),
-    [groups, matchIds],
+    () =>
+      groups.filter(
+        (group) =>
+          (!matchIds || matchIds.has(group.id)) &&
+          (activeFilter === "All" || group.category === activeFilter),
+      ),
+    [groups, matchIds, activeFilter],
   );
+  const sections = useMemo(
+    () =>
+      (
+        [
+          { status: "active", label: "ACTIVE" },
+          { status: "settled", label: "SETTLED" },
+          { status: "unsettled", label: "UNSETTLED" },
+        ] as const
+      ).map((section) => ({
+        ...section,
+        groups: visibleGroups.filter((group) => group.status === section.status),
+      })),
+    [visibleGroups],
+  );
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<Filter, number>([["All", groups.length]]);
+    for (const group of groups) counts.set(group.category, (counts.get(group.category) ?? 0) + 1);
+    return counts;
+  }, [groups]);
 
   const totals = useMemo(() => totalsFor(groups), [groups]);
   const netTone = balanceTone(totals.net);
@@ -339,7 +438,7 @@ export default function GroupsPage() {
               user={user}
               onNotificationsChange={notifyDataChanged}
             >
-              <HeaderButton label="Create group" onClick={() => setShowCreateModal(true)}>
+              <HeaderButton label="Create group" onClick={() => openCreate()}>
                 <PeoplePlusIcon />
               </HeaderButton>
             </PageHeader>
@@ -399,21 +498,23 @@ export default function GroupsPage() {
                 </section>
               </>
             }
-            <div className="manemi-rich-filter-list" aria-label="Filter groups">
-              {["All", ...categories.map((category) => category.name)].map(
-                (category) => (
-                  <button
-                    key={category}
-                    type="button"
-                    className={`manemi-rich-filter ${activeFilter === category ? "selected" : ""}`}
-                    onClick={() => setActiveFilter(category)}
-                  >
-                    {category}
-                  </button>
-                ),
-              )}
+            <div className="manemi-rich-filter-list" role="group" aria-label="Filter groups by category">
+              {FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  className={`manemi-rich-filter ${activeFilter === filter ? "selected" : ""}`}
+                  aria-pressed={activeFilter === filter}
+                  onClick={() => changeFilter(filter)}
+                >
+                  {filter}
+                  {!loadingGroups && (
+                    <span className="manemi-rich-filter-count">{categoryCounts.get(filter) ?? 0}</span>
+                  )}
+                </button>
+              ))}
             </div>
-            <div className="manemi-rich-search-row">
+            <div className="manemi-rich-search-row" aria-busy={searching || undefined}>
               <CustomIcon name="search" size={18} />
               <input
                 id="manemi-rich-search"
@@ -506,7 +607,7 @@ export default function GroupsPage() {
               <button
                 type="button"
                 className="groups-create-button"
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => openCreate()}
               >
                 Create Group
               </button>
@@ -522,196 +623,80 @@ export default function GroupsPage() {
           </section>
         ) : (
           <>
-            {activeFilter !== "All" && (
-              <p className="manemi-rich-filter-note">
-                Categories are not saved yet. Choose All to see every group.
-              </p>
-            )}
             {searchError && (
               <p className="manemi-rich-filter-note" role="alert">
                 {searchError}
               </p>
             )}
-            {visibleGroups.length === 0 && matchIds && (
-              <p className="manemi-rich-filter-note" role="status">
-                No groups or expenses match “{query}”.
-              </p>
-            )}
-            {(
-              [
-                { status: "active", label: "ACTIVE" },
-                { status: "settled", label: "SETTLED" },
-                { status: "unsettled", label: "UNSETTLED" },
-              ] as const
-            ).map((section) => {
-              const sectionGroups = visibleGroups.filter(
-                (group) => group.status === section.status,
-              );
-              // Only Active is always shown; empty Settled/Unsettled are hidden.
-              if (section.status !== "active" && sectionGroups.length === 0)
-                return null;
-              return (
-                <section
-                  className="manemi-rich-group-section"
-                  key={section.status}
-                >
-                  <h2>
-                    {section.label} · {sectionGroups.length}
-                  </h2>
-                  <div className="manemi-rich-group-grid">
-                    {(activeFilter === "All" ? sectionGroups : []).map(
-                      (group) => (
-                        <article
-                          className="manemi-rich-group-card"
+            {visibleGroups.length === 0 ? (
+              <section className="manemi-filter-empty" aria-labelledby="manemi-filter-empty-title">
+                <span className="manemi-filter-empty-icon" aria-hidden="true">
+                  <Icon name={activeFilter === "All" ? "info" : groupCategoryIcon(activeFilter)} size={24} />
+                </span>
+                <h2 id="manemi-filter-empty-title">
+                  {matchIds
+                    ? activeFilter === "All"
+                      ? `No groups match “${query}”`
+                      : `No ${activeFilter} groups match “${query}”`
+                    : `No ${activeFilter} groups yet`}
+                </h2>
+                <p>
+                  {matchIds
+                    ? "Search looks at group names and expense titles. Try a broader term."
+                    : `Create a ${activeFilter} group, or move an existing one here from its ••• menu.`}
+                </p>
+                <div className="manemi-filter-empty-actions">
+                  {matchIds || activeFilter === "All" ? null : (
+                    <button type="button" className="manemi-filter-empty-primary" onClick={() => openCreate(activeFilter)}>
+                      Create {activeFilter} group
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="manemi-filter-empty-secondary"
+                    onClick={() => {
+                      setSearch("");
+                      changeFilter("All");
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              </section>
+            ) : (
+              sections.map((section) => {
+                // Only Active is always shown; empty Settled/Unsettled are hidden.
+                if (section.status !== "active" && section.groups.length === 0) return null;
+                return (
+                  <section
+                    className="manemi-rich-group-section"
+                    key={section.status}
+                    aria-busy={searching || undefined}
+                  >
+                    <h2>
+                      {section.label} · {section.groups.length}
+                    </h2>
+                    <div className="manemi-rich-group-grid">
+                      {section.groups.map((group, index) => (
+                        <GroupCard
                           key={group.id}
-                          onClick={() => router.push(`/groups/${group.id}`)}
-                          onKeyDown={(event) => {
-                            if (
-                              event.target === event.currentTarget &&
-                              (event.key === "Enter" || event.key === " ")
-                            ) {
-                              event.preventDefault();
-                              router.push(`/groups/${group.id}`);
-                            }
-                          }}
-                          role="link"
-                          tabIndex={0}
-                          aria-label={`Open ${group.name} details`}
-                        >
-                          <div className="manemi-rich-card-top">
-                            <span
-                              className="manemi-rich-group-emoji"
-                              aria-hidden="true"
-                            >
-                              <Icon name={group.icon} size={22} />
-                            </span>
-                            <div className="manemi-rich-card-menu-wrap">
-                              <button
-                                type="button"
-                                className="manemi-rich-dots"
-                                aria-label={`Options for ${group.name}`}
-                                aria-expanded={groupMenu === group.id}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setGroupMenu(
-                                    groupMenu === group.id ? null : group.id,
-                                  );
-                                }}
-                              >
-                                •••
-                              </button>
-                            </div>
-                          </div>
-                          <h3>{group.name}</h3>
-                          <p className="manemi-rich-members">
-                            {group.members} members ·{" "}
-                            {group.isCreator ? "Admin" : "Member"}
-                          </p>
-                          <div className="manemi-card-body">
-                            {(() => {
-                              const tone =
-                                group.status === "settled"
-                                  ? { tone: "zero", arrow: "✓", label: "Settled" }
-                                  : balanceTone(group.net);
-                              return (
-                                <div
-                                  className={`manemi-rich-card-balance manemi-tone-${tone.tone}`}
-                                >
-                                  <span className="manemi-card-overline">
-                                    Total Balance
-                                  </span>
-                                  <strong>{peso(Math.abs(group.net))}</strong>
-                                  <span className="manemi-card-direction">
-                                    <span aria-hidden="true">{tone.arrow}</span>{" "}
-                                    {tone.label}
-                                  </span>
-                                  <small>
-                                    {group.status === "active"
-                                      ? "Active group"
-                                      : group.status === "settled"
-                                        ? "All balances paid"
-                                        : "Outstanding group balances"}
-                                  </small>
-                                </div>
-                              );
-                            })()}
-
-                            <div
-                              className="manemi-card-breakdown"
-                              aria-label={`Balance breakdown for ${group.name}`}
-                            >
-                              <span className="manemi-card-overline">
-                                Breakdown
-                              </span>
-                              {group.counterparties.length === 0 ? (
-                                <p className="manemi-breakdown-empty">
-                                  {group.expenseCount === 0
-                                    ? "No expenses yet"
-                                    : "You're square with everyone"}
-                                </p>
-                              ) : (
-                                <ul className="manemi-breakdown-list">
-                                  {group.counterparties.slice(0, 3).map((person) => (
-                                    <li
-                                      key={person.userId}
-                                      className={
-                                        person.amount > 0
-                                          ? "manemi-debt-in"
-                                          : "manemi-debt-out"
-                                      }
-                                    >
-                                      <span className="manemi-debt-text">
-                                        <span aria-hidden="true">
-                                          {person.amount > 0 ? "↙" : "↗"}
-                                        </span>{" "}
-                                        {person.amount > 0 ? (
-                                          <>
-                                            <b>{person.name}</b> owes you
-                                          </>
-                                        ) : (
-                                          <>
-                                            You owe <b>{person.name}</b>
-                                          </>
-                                        )}
-                                      </span>
-                                      <strong>{peso(Math.abs(person.amount))}</strong>
-                                    </li>
-                                  ))}
-                                  {group.counterparties.length > 3 && (
-                                    <li className="manemi-breakdown-more">
-                                      +{group.counterparties.length - 3} more in
-                                      this group
-                                    </li>
-                                  )}
-                                </ul>
-                              )}
-                              {group.counterparties.length > 0 && (
-                                <RawBreakdown
-                                  people={group.raw}
-                                  nameOf={(id) => group.rawNames[id] ?? "A former member"}
-                                  compact
-                                />
-                              )}
-                              {group.expenseCount > 0 && (
-                                <p className="manemi-breakdown-spent">
-                                  {peso(group.spent)} spent ·{" "}
-                                  {group.expenseCount}{" "}
-                                  {group.expenseCount === 1 ? "expense" : "expenses"}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </article>
-                      ),
-                    )}
-                  </div>
-                </section>
-              );
-            })}
+                          group={group}
+                          index={index}
+                          menuOpen={groupMenu === group.id}
+                          onOpen={openGroup}
+                          onPrefetch={prefetchGroup}
+                          onMenu={toggleMenu}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })
+            )}
             <button
               type="button"
               className="manemi-rich-create-another"
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => openCreate(activeFilter === "All" ? undefined : activeFilter)}
             >
               + Create Another Group
             </button>
@@ -803,6 +788,48 @@ export default function GroupsPage() {
                 </span>
               </button>
             </div>
+            {!selectedGroup.isArchived && selectedGroup.role !== "member" ? (
+              <div className="manemi-actions-category">
+                <h3 id="manemi-actions-category-title">Category</h3>
+                <div
+                  className="manemi-actions-category-chips"
+                  role="radiogroup"
+                  aria-labelledby="manemi-actions-category-title"
+                >
+                  {GROUP_CATEGORIES.map((category) => {
+                    const checked = selectedGroup.category === category.name;
+                    return (
+                      <button
+                        key={category.name}
+                        type="button"
+                        role="radio"
+                        aria-checked={checked}
+                        disabled={savingCategory}
+                        className={`new-group-category-chip ${checked ? "active" : ""}`}
+                        onClick={() => void changeCategory(selectedGroup.id, category.name)}
+                      >
+                        <Icon name={category.icon} size={18} /> {category.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {categoryError && (
+                  <p role="alert" className="manemi-actions-category-error">
+                    {categoryError}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="manemi-actions-category">
+                <h3>Category</h3>
+                <p className="manemi-actions-category-readonly">
+                  <Icon name={selectedGroup.icon} size={18} /> {selectedGroup.category}
+                </p>
+                {!selectedGroup.isArchived && (
+                  <small className="manemi-actions-category-hint">Only the owner or an admin can change it</small>
+                )}
+              </div>
+            )}
             <div className="manemi-actions-list manemi-actions-danger">
               {selectedGroup.isCreator ? (
                 selectedGroup.status === "active" && (
@@ -1023,26 +1050,10 @@ export default function GroupsPage() {
             <form onSubmit={handleCreateGroup}>
               <div className="new-group-name-row">
                 <div className="new-group-icon-field">
-                  <label htmlFor="new-group-icon">Icon</label>
-                  <div className="new-group-emoji-select-wrap">
-                    <Select
-                      id="new-group-icon"
-                      variant="field"
-                      align="start"
-                      label="Group icon"
-                      value={groupEmoji}
-                      onChange={setGroupEmoji}
-                      options={[
-                        { value: "plane", label: "Travel", icon: <Icon name="plane" size={22} /> },
-                        { value: "home", label: "Home", icon: <Icon name="home" size={22} /> },
-                        { value: "utensils", label: "Food", icon: <Icon name="utensils" size={22} /> },
-                        { value: "party", label: "Party", icon: <Icon name="party" size={22} /> },
-                        { value: "flag", label: "Trip", icon: <Icon name="flag" size={22} /> },
-                        { value: "users", label: "Friends", icon: <Icon name="users" size={22} /> },
-                        { value: "box", label: "Other", icon: <Icon name="box" size={22} /> },
-                      ]}
-                    />
-                  </div>
+                  <span className="new-group-icon-label">Icon</span>
+                  <span className="new-group-icon-preview" aria-hidden="true">
+                    <Icon key={groupCategory} name={groupCategoryIcon(groupCategory)} size={26} />
+                  </span>
                 </div>
                 <div className="new-group-name-field">
                   <label htmlFor="new-group-name">Group name</label>
@@ -1059,15 +1070,16 @@ export default function GroupsPage() {
               </div>
 
               <div className="new-group-category-field">
-                <label>Category</label>
-                <div className="new-group-categories">
-                  {categories.map((category) => (
+                <span className="new-group-category-label" id="new-group-category-label">Category</span>
+                <div className="new-group-categories" role="radiogroup" aria-labelledby="new-group-category-label">
+                  {GROUP_CATEGORIES.map((category) => (
                     <button
                       key={category.name}
                       type="button"
                       className={`new-group-category-chip ${groupCategory === category.name ? "active" : ""}`}
                       onClick={() => setGroupCategory(category.name)}
-                      aria-pressed={groupCategory === category.name}
+                      role="radio"
+                      aria-checked={groupCategory === category.name}
                     >
                       <Icon name={category.icon} size={18} /> {category.name}
                     </button>
@@ -1098,6 +1110,172 @@ export default function GroupsPage() {
     </main>
   );
 }
+
+type GroupCardProps = {
+  group: GroupData;
+  /** Position in its section, for the entrance stagger. */
+  index: number;
+  menuOpen: boolean;
+  onOpen: (id: string) => void;
+  onPrefetch: (id: string) => void;
+  onMenu: (id: string) => void;
+};
+
+/**
+ * One group card. Memoized: typing in search or opening a menu re-renders
+ * only the cards whose props changed, not the whole grid.
+ */
+const GroupCard = memo(function GroupCard({ group, index, menuOpen, onOpen, onPrefetch, onMenu }: GroupCardProps) {
+  const prefetched = useRef(false);
+  const prefetch = () => {
+    if (prefetched.current) return;
+    prefetched.current = true;
+    onPrefetch(group.id);
+  };
+  return (
+      <article
+        className="manemi-rich-group-card"
+        style={{ "--card-i": Math.min(index, 8), viewTransitionName: `g-${group.id}` } as CSSProperties}
+        onClick={() => onOpen(group.id)}
+        onPointerEnter={prefetch}
+        onFocus={prefetch}
+        onKeyDown={(event) => {
+          if (
+            event.target === event.currentTarget &&
+            (event.key === "Enter" || event.key === " ")
+          ) {
+            event.preventDefault();
+            onOpen(group.id);
+          }
+        }}
+        role="link"
+        tabIndex={0}
+        aria-label={`Open ${group.name} details`}
+      >
+        <div className="manemi-rich-card-top">
+          <span
+            className="manemi-rich-group-emoji"
+            aria-hidden="true"
+          >
+            <Icon name={group.icon} size={22} />
+          </span>
+          <div className="manemi-rich-card-menu-wrap">
+            <button
+              type="button"
+              className="manemi-rich-dots"
+              aria-label={`Options for ${group.name}`}
+              aria-expanded={menuOpen}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMenu(group.id);
+              }}
+            >
+              •••
+            </button>
+          </div>
+        </div>
+        <h3>{group.name}</h3>
+        <p className="manemi-rich-members">
+          {group.category} · {group.members} {group.members === 1 ? "member" : "members"} ·{" "}
+          {group.role === "owner" ? "Owner" : group.role === "admin" ? "Admin" : "Member"}
+        </p>
+        <div className="manemi-card-body">
+          {(() => {
+            const tone =
+              group.status === "settled"
+                ? { tone: "zero", arrow: "✓", label: "Settled" }
+                : balanceTone(group.net);
+            return (
+              <div
+                className={`manemi-rich-card-balance manemi-tone-${tone.tone}`}
+              >
+                <span className="manemi-card-overline">
+                  Total Balance
+                </span>
+                <strong>{peso(Math.abs(group.net))}</strong>
+                <span className="manemi-card-direction">
+                  <span aria-hidden="true">{tone.arrow}</span>{" "}
+                  {tone.label}
+                </span>
+                <small>
+                  {group.status === "active"
+                    ? "Active group"
+                    : group.status === "settled"
+                      ? "All balances paid"
+                      : "Outstanding group balances"}
+                </small>
+              </div>
+            );
+          })()}
+
+          <div
+            className="manemi-card-breakdown"
+            aria-label={`Balance breakdown for ${group.name}`}
+          >
+            <span className="manemi-card-overline">
+              Breakdown
+            </span>
+            {group.counterparties.length === 0 ? (
+              <p className="manemi-breakdown-empty">
+                {group.expenseCount === 0
+                  ? "No expenses yet"
+                  : "You're square with everyone"}
+              </p>
+            ) : (
+              <ul className="manemi-breakdown-list">
+                {group.counterparties.slice(0, 3).map((person) => (
+                  <li
+                    key={person.userId}
+                    className={
+                      person.amount > 0
+                        ? "manemi-debt-in"
+                        : "manemi-debt-out"
+                    }
+                  >
+                    <span className="manemi-debt-text">
+                      <span aria-hidden="true">
+                        {person.amount > 0 ? "↙" : "↗"}
+                      </span>{" "}
+                      {person.amount > 0 ? (
+                        <>
+                          <b>{person.name}</b> owes you
+                        </>
+                      ) : (
+                        <>
+                          You owe <b>{person.name}</b>
+                        </>
+                      )}
+                    </span>
+                    <strong>{peso(Math.abs(person.amount))}</strong>
+                  </li>
+                ))}
+                {group.counterparties.length > 3 && (
+                  <li className="manemi-breakdown-more">
+                    +{group.counterparties.length - 3} more in
+                    this group
+                  </li>
+                )}
+              </ul>
+            )}
+            {group.counterparties.length > 0 && (
+              <RawBreakdown
+                people={group.raw}
+                nameOf={(id) => group.rawNames[id] ?? "A former member"}
+                compact
+              />
+            )}
+            {group.expenseCount > 0 && (
+              <p className="manemi-breakdown-spent">
+                {peso(group.spent)} spent ·{" "}
+                {group.expenseCount}{" "}
+                {group.expenseCount === 1 ? "expense" : "expenses"}
+              </p>
+            )}
+          </div>
+        </div>
+      </article>
+  );
+});
 
 /** People with a plus badge: the Create group action. */
 function PeoplePlusIcon() {

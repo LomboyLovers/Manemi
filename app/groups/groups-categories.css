@@ -1,0 +1,333 @@
+/* ==========================================
+   GROUPS: categories, search feedback, motion
+   Motion uses transform/opacity only (plus colour on chips), short and
+   decelerating; everything is instant under prefers-reduced-motion.
+   ========================================== */
+
+.manemi-groups-page {
+  --mn-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --mn-dur-fast: 140ms;
+  --mn-dur: 220ms;
+  --mn-dur-sheet: 280ms;
+}
+
+/* ---------- Category chips ---------- */
+.manemi-rich-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition:
+    background-color var(--mn-dur-fast) var(--mn-ease-out),
+    border-color var(--mn-dur-fast) var(--mn-ease-out),
+    color var(--mn-dur-fast) var(--mn-ease-out),
+    transform var(--mn-dur-fast) var(--mn-ease-out);
+}
+.manemi-rich-filter:active {
+  transform: scale(0.96);
+}
+.manemi-rich-filter:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .manemi-rich-filter:not(.selected):hover {
+    border-color: #55535c;
+    color: #d6d3dc;
+  }
+}
+.manemi-rich-filter-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #2f2e35;
+  color: #a8a6b0;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  transition:
+    background-color var(--mn-dur-fast) var(--mn-ease-out),
+    color var(--mn-dur-fast) var(--mn-ease-out);
+}
+.manemi-rich-filter.selected .manemi-rich-filter-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* ---------- Search ---------- */
+.manemi-rich-search-row {
+  transition: border-color var(--mn-dur-fast) var(--mn-ease-out);
+}
+.manemi-rich-search-row:focus-within {
+  border-color: #6d4a99;
+}
+/* One clear button: ours (44px target), not the browser's tiny one. */
+.manemi-rich-search-row input::-webkit-search-cancel-button,
+.groups-page-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.manemi-search-clear {
+  animation: mn-fade-in var(--mn-dur-fast) var(--mn-ease-out) both;
+}
+/* While the database search runs, dim the old results — but only if it takes
+   longer than 150ms, so fast searches never flicker. */
+.manemi-rich-group-grid {
+  transition: opacity var(--mn-dur-fast) var(--mn-ease-out);
+}
+.manemi-rich-group-section[aria-busy="true"] .manemi-rich-group-grid {
+  opacity: 0.55;
+  transition-delay: 150ms;
+}
+
+/* ---------- Group cards ---------- */
+.groups-page-content .manemi-rich-group-card:not([aria-hidden="true"]) {
+  cursor: pointer;
+  animation: mn-card-in var(--mn-dur) var(--mn-ease-out) backwards;
+  animation-delay: calc(var(--card-i, 0) * 28ms);
+  transition:
+    border-color var(--mn-dur-fast) var(--mn-ease-out),
+    transform var(--mn-dur-fast) var(--mn-ease-out);
+}
+@media (hover: hover) {
+  .groups-page-content .manemi-rich-group-card:not([aria-hidden="true"]):hover {
+    border-color: #4c4955;
+    transform: translateY(-2px);
+  }
+}
+.groups-page-content .manemi-rich-group-card:not([aria-hidden="true"]):active {
+  transform: scale(0.99);
+}
+.groups-page-content .manemi-rich-group-card:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+
+/* Filter changes use the View Transitions API (see withViewTransition). */
+::view-transition-group(*) {
+  animation-duration: var(--mn-dur, 220ms);
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 160ms;
+}
+
+/* ---------- Empty filter / search result ---------- */
+.manemi-filter-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 36px 20px;
+  border: 1px solid #36353d;
+  border-radius: 23px;
+  background: linear-gradient(135deg, #202024, #1a1a1e);
+  text-align: center;
+  animation: mn-fade-up var(--mn-dur) var(--mn-ease-out) both;
+}
+.manemi-filter-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #29292f;
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.manemi-filter-empty h2 {
+  margin: 6px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f5f5f7;
+  overflow-wrap: anywhere;
+}
+.manemi-filter-empty p {
+  margin: 0;
+  max-width: 42ch;
+  color: #a6a2ad;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.manemi-filter-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.manemi-filter-empty-primary,
+.manemi-filter-empty-secondary {
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--mn-dur-fast) var(--mn-ease-out),
+    transform var(--mn-dur-fast) var(--mn-ease-out);
+}
+.manemi-filter-empty-primary {
+  border: 1px solid #9035f2;
+  background: #9035f2;
+  color: #fff;
+}
+.manemi-filter-empty-secondary {
+  border: 1px solid #39383f;
+  background: #24242a;
+  color: #e6e3ea;
+}
+.manemi-filter-empty-primary:active,
+.manemi-filter-empty-secondary:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) {
+  .manemi-filter-empty-primary:hover {
+    background: #9d4ff5;
+  }
+  .manemi-filter-empty-secondary:hover {
+    background: #2c2c33;
+  }
+}
+
+/* ---------- Group menu: category picker ---------- */
+.manemi-actions-category {
+  margin: 0 0 18px;
+}
+.manemi-actions-category h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #9895a1;
+}
+.manemi-actions-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.manemi-actions-category-chips .new-group-category-chip:disabled {
+  cursor: progress;
+}
+.manemi-actions-category-error {
+  margin: 10px 0 0;
+  color: #ff8585;
+  font-size: 13px;
+}
+.manemi-actions-category-readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #e6e3ea;
+  font-size: 15px;
+  font-weight: 500;
+}
+.manemi-actions-category-readonly svg {
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.manemi-actions-category-hint {
+  display: block;
+  margin-top: 6px;
+  color: #8f8b98;
+  font-size: 12px;
+}
+
+/* Chips everywhere (create sheet + group menu) ease between states. */
+.new-group-category-chip {
+  transition:
+    background-color var(--mn-dur-fast, 140ms) cubic-bezier(0.2, 0, 0, 1),
+    border-color var(--mn-dur-fast, 140ms) cubic-bezier(0.2, 0, 0, 1),
+    color var(--mn-dur-fast, 140ms) cubic-bezier(0.2, 0, 0, 1),
+    transform var(--mn-dur-fast, 140ms) cubic-bezier(0.2, 0, 0, 1);
+}
+.new-group-category-chip:active {
+  transform: scale(0.96);
+}
+
+/* ---------- Create sheet: icon follows the category ---------- */
+.new-group-icon-label,
+.new-group-category-label {
+  display: block;
+  margin-bottom: 10px;
+  color: #f5f5f7;
+  font-size: 15px;
+  font-weight: 600;
+}
+.new-group-icon-preview {
+  display: grid;
+  place-items: center;
+  height: 58px;
+  border-radius: 16px;
+  background: #25252b;
+  border: 1px solid #35353c;
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.new-group-icon-preview > * {
+  animation: mn-pop-in var(--mn-dur, 220ms) cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+/* ---------- Sheets slide up, backdrops fade ---------- */
+.manemi-actions-overlay,
+.new-group-overlay,
+.manemi-invite-overlay {
+  animation: mn-fade-in 180ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+.manemi-actions-sheet,
+.new-group-sheet,
+.manemi-invite-sheet {
+  animation: mn-sheet-up var(--mn-dur-sheet, 280ms) cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes mn-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mn-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mn-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mn-pop-in {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mn-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manemi-rich-filter,
+  .manemi-rich-filter-count,
+  .manemi-rich-search-row,
+  .manemi-rich-group-grid,
+  .groups-page-content .manemi-rich-group-card,
+  .manemi-filter-empty-primary,
+  .manemi-filter-empty-secondary,
+  .new-group-category-chip {
+    transition: none;
+  }
+  .manemi-search-clear,
+  .groups-page-content .manemi-rich-group-card:not([aria-hidden="true"]),
+  .manemi-filter-empty,
+  .new-group-icon-preview > *,
+  .manemi-actions-overlay,
+  .new-group-overlay,
+  .manemi-invite-overlay,
+  .manemi-actions-sheet,
+  .new-group-sheet,
+  .manemi-invite-sheet {
+    animation: none;
+  }
+  .manemi-rich-filter:active,
+  .new-group-category-chip:active,
+  .groups-page-content .manemi-rich-group-card:not([aria-hidden="true"]):hover,
+  .groups-page-content .manemi-rich-group-card:not([aria-hidden="true"]):active {
+    transform: none;
+  }
+}
