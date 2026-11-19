@@ -182,7 +182,7 @@ export async function inviteFriends(
 
 /** The signed-in user's profile, for pages that don't load group data. */
 let profileCache: { userId: string; promise: Promise<CurrentProfile | null> } | null = null;
-type CurrentProfile = { id: string; name: string; email: string; handle: string };
+type CurrentProfile = { id: string; name: string; email: string; handle: string; avatarUrl?: string | null };
 
 /** Clears the cached profile (after sign-out or a profile edit). */
 export function invalidateCurrentUser() {
@@ -212,7 +212,7 @@ async function fetchProfile(
 ): Promise<CurrentProfile> {
   const { data } = await supabase
     .from("User")
-    .select("name, userCode")
+    .select("name, userCode, avatarUrl")
     .eq("userId", user.id)
     .maybeSingle();
   return {
@@ -224,5 +224,6 @@ async function fetchProfile(
       "there",
     email: user.email ?? "",
     handle: String(data?.userCode ?? "").trim(),
+    avatarUrl: (data?.avatarUrl as string | null | undefined) ?? null,
   };
 }

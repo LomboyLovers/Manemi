@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CurrentUser } from "@/lib/manemi/groups";
-import { initialOf } from "@/lib/manemi/format";
+import Avatar from "./Avatar";
 import AccountSheet from "./AccountSheet";
 import NotificationsBell from "./NotificationsBell";
 import "./popups.css";
@@ -35,7 +35,7 @@ export default function PageHeader({
         onClick={() => setAccountOpen(true)}
         disabled={!user}
       >
-        {initialOf(user?.name || "?")}
+        <Avatar name={user?.name || "?"} url={user?.avatarUrl} />
       </button>
 
       <div className="mn-header-actions">
@@ -48,6 +48,7 @@ export default function PageHeader({
           name={user.name}
           email={user.email}
           handle={user.handle}
+          avatarUrl={user.avatarUrl ?? null}
           onClose={() => setAccountOpen(false)}
         />
       )}

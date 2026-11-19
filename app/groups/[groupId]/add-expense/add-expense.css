@@ -494,3 +494,9 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* The payer's checkbox stays on: whoever paid is part of the split */
+.ae-check[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

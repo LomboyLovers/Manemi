@@ -1,5 +1,6 @@
 "use client";
 
+import Avatar from "@/components/Avatar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppNav from "@/components/AppNav";
@@ -18,7 +19,6 @@ import {
   sendFriendRequest,
   type FriendRow,
 } from "@/lib/manemi/friends";
-import { initialOf } from "@/lib/manemi/format";
 import "@/components/friends.css";
 import "@/components/skeleton.css";
 import "./friends-page.css";
@@ -240,7 +240,7 @@ export default function FriendsPage() {
                 <li key={row.friendshipId}>
                   <div className="mn-friend-row">
                     <span className="mn-friend-avatar" aria-hidden="true">
-                      {initialOf(row.name)}
+                      <Avatar name={row.name} url={row.avatarUrl} />
                     </span>
                     <span className="mn-friend-text">
                       <strong>{row.name}</strong>
@@ -326,7 +326,7 @@ export default function FriendsPage() {
                 <li key={row.friendshipId}>
                   <div className="mn-friend-row">
                     <span className="mn-friend-avatar" aria-hidden="true">
-                      {initialOf(row.name)}
+                      <Avatar name={row.name} url={row.avatarUrl} />
                     </span>
                     <span className="mn-friend-text">
                       <strong>{row.name}</strong>
@@ -366,7 +366,7 @@ export default function FriendsPage() {
                 <li key={row.friendshipId}>
                   <div className="mn-friend-row">
                     <span className="mn-friend-avatar" aria-hidden="true">
-                      {initialOf(row.name)}
+                      <Avatar name={row.name} url={row.avatarUrl} />
                     </span>
                     <span className="mn-friend-text">
                       <strong>{row.name}</strong>

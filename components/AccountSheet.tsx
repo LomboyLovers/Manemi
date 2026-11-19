@@ -3,28 +3,35 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { initialOf } from "@/lib/manemi/format";
 import { invalidateGroupsData } from "@/lib/manemi/groups";
 import { invalidateCurrentUser } from "@/lib/manemi/friends";
+import { notifyDataChanged } from "@/lib/manemi/events";
 import { useModalFocus } from "./useModalFocus";
 import NotificationSettings from "./NotificationSettings";
+import ProfileEditor from "./ProfileEditor";
+import Avatar from "./Avatar";
 import "./popups.css";
 
 type Props = {
   name: string;
   email: string;
   handle?: string;
+  avatarUrl?: string | null;
   onClose: () => void;
 };
 
 /** Account popup: bottom sheet on phones, centered dialog on desktop. */
-export default function AccountSheet({ name, email, handle, onClose }: Props) {
+export default function AccountSheet({ name: initialName, email, handle, avatarUrl: initialAvatar = null, onClose }: Props) {
   const router = useRouter();
   const ref = useModalFocus<HTMLElement>(onClose);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"main" | "notifications">("main");
+  const [view, setView] = useState<"main" | "notifications" | "profile">("main");
   const [userId, setUserId] = useState("");
+  // Updated right away after a profile save.
+  const [name, setName] = useState(initialName);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatar);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     void createClient()
@@ -61,14 +68,16 @@ export default function AccountSheet({ name, email, handle, onClose }: Props) {
       >
         <div className="mn-popup-handle" aria-hidden="true" />
         <header className="mn-popup-sheet-header">
-          {view === "notifications" ? (
+          {view !== "main" ? (
             <button type="button" className="mn-popup-done mn-popup-back" onClick={() => setView("main")}>
               ‹ Back
             </button>
           ) : (
             <span aria-hidden="true" />
           )}
-          <h2 id="account-title">{view === "notifications" ? "Email notifications" : "Account"}</h2>
+          <h2 id="account-title">
+            {view === "notifications" ? "Email notifications" : view === "profile" ? "Edit profile" : "Account"}
+          </h2>
           <button type="button" className="mn-popup-done" onClick={onClose} data-autofocus>
             Done
           </button>
@@ -76,19 +85,47 @@ export default function AccountSheet({ name, email, handle, onClose }: Props) {
 
         {view === "notifications" && userId ? (
           <NotificationSettings userId={userId} />
+        ) : view === "profile" && userId ? (
+          <ProfileEditor
+            userId={userId}
+            name={name}
+            email={email}
+            avatarUrl={avatarUrl}
+            onCancel={() => setView("main")}
+            onSaved={(saved) => {
+              setName(saved.name);
+              setAvatarUrl(saved.avatarUrl);
+              invalidateCurrentUser();
+              invalidateGroupsData();
+              notifyDataChanged();
+              setNotice("Profile updated.");
+              setView("main");
+            }}
+          />
         ) : (
         <>
         <div className="mn-account-identity">
           <div className="mn-account-avatar" aria-hidden="true">
-            {initialOf(name || "?")}
+            <Avatar name={name} url={avatarUrl} />
           </div>
           <strong>{name}</strong>
           {subtitle && <span>{subtitle}</span>}
+          {notice && (
+            <p className="mn-account-notice" role="status">
+              {notice}
+            </p>
+          )}
         </div>
 
         <div className="mn-account-list">
-          {/* Profile page isn't designed yet: the row is shown but does nothing. */}
-          <button type="button" aria-disabled="true" title="Coming soon">
+          <button
+            type="button"
+            className="mn-account-row-live"
+            onClick={() => {
+              setNotice("");
+              setView("profile");
+            }}
+          >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="8" r="4" />
               <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />

@@ -16,6 +16,7 @@ import {
 } from "@/lib/manemi/groups";
 import { greeting, isZero, peso } from "@/lib/manemi/format";
 import CategoryIcon from "@/components/CategoryIcon";
+import SpendingStats from "@/components/SpendingStats";
 import { searchGroupIds, searchHistory } from "@/lib/manemi/search";
 import { useDebounced } from "@/lib/manemi/useDebounced";
 import type { HistoryExpense } from "@/lib/manemi/groups";
@@ -217,15 +218,9 @@ export default function Dashboard() {
                   </strong>
                 </div>
               </div>
-              <div className="dashboard-balance-footer">
-                <span>
-                  Spent this month <b>{peso(totals.spentThisMonth)}</b>
-                </span>
-                <span>
-                  This week <b>{peso(totals.spentThisWeek)}</b>
-                </span>
-              </div>
             </section>
+
+            {user && <SpendingStats userId={user.id} />}
 
             <section
               className="dashboard-section dashboard-recent-groups"

@@ -6,9 +6,10 @@ import Link from "next/link";
 import type { GroupSummary } from "@/lib/manemi/groups";
 import { createClient } from "@/lib/supabase/client";
 import { loadCurrentUser } from "@/lib/manemi/friends";
-import { initialOf } from "@/lib/manemi/format";
+import { useDataVersion } from "@/lib/manemi/events";
 import QuickActions from "./QuickActions";
 import AccountSheet from "./AccountSheet";
+import Avatar from "./Avatar";
 import "./app-nav.css";
 
 export type NavSection = "home" | "groups" | "friends" | "history" | "reports";
@@ -52,6 +53,9 @@ export default function AppNav({ active, groups }: Props) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [me, setMe] = useState<Awaited<ReturnType<typeof loadCurrentUser>>>(null);
 
+  const dataVersion = useDataVersion();
+
+  // Reloads after a profile edit (notifyDataChanged), so the photo updates here too.
   useEffect(() => {
     let active = true;
     loadCurrentUser(createClient())
@@ -60,7 +64,7 @@ export default function AppNav({ active, groups }: Props) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [dataVersion]);
 
   return (
     <>
@@ -112,7 +116,7 @@ export default function AppNav({ active, groups }: Props) {
           disabled={!me}
         >
           <span className="mn-nav-profile-avatar" aria-hidden="true">
-            {initialOf(me?.name || "?")}
+            <Avatar name={me?.name || "?"} url={me?.avatarUrl} />
           </span>
           <span className="mn-nav-profile-text">
             <strong>{me?.name ?? "Loading…"}</strong>
@@ -123,7 +127,7 @@ export default function AppNav({ active, groups }: Props) {
 
       {quickOpen && <QuickActions groups={groups} onClose={() => setQuickOpen(false)} />}
       {accountOpen && me && (
-        <AccountSheet name={me.name} email={me.email} handle={me.handle} onClose={() => setAccountOpen(false)} />
+        <AccountSheet name={me.name} email={me.email} handle={me.handle} avatarUrl={me.avatarUrl ?? null} onClose={() => setAccountOpen(false)} />
       )}
     </>
   );

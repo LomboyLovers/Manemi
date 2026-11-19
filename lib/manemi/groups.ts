@@ -79,6 +79,8 @@ export type CurrentUser = {
   email: string;
   /** User.userCode, shown as @handle. */
   handle: string;
+  /** Profile photo URL, or null to show the initial. */
+  avatarUrl?: string | null;
 };
 
 export type GroupsData = {
@@ -186,7 +188,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     supabase.from("Group_Member").select("groupId").eq("userId", me.id),
     // Include groups the user created in case the membership row is missing.
     supabase.from("Group").select("groupId").eq("createdBy", me.id),
-    supabase.from("User").select("name, userCode").eq("userId", me.id).maybeSingle(),
+    supabase.from("User").select("name, userCode, avatarUrl").eq("userId", me.id).maybeSingle(),
   ]);
   if (membershipsResult.error)
     throw new Error(`Unable to load group memberships: ${membershipsResult.error.message}`);
@@ -203,6 +205,7 @@ export async function loadGroupsData(supabase: Supabase): Promise<GroupsData | n
     name: myName,
     email: me.email ?? "",
     handle: String(profileResult.data?.userCode ?? "").trim(),
+    avatarUrl: (profileResult.data?.avatarUrl as string | null | undefined) ?? null,
   };
 
   const groupIds = [

@@ -1628,6 +1628,68 @@
 .md-people li.is-positive strong {
   color: var(--mn-positive, #3ddc84);
 }
+/* Other currencies under the peso total: a row of tiles, one per currency used */
+.md-currency-block {
+  margin-top: 12px;
+}
+.md-currency-heading {
+  margin: 0 0 8px;
+  color: #b9b6c0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.md-currency-heading span {
+  color: var(--mn-tertiary, #8a8a95);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.md-currency-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.md-currency-totals li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.md-currency-code {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--mn-accent, #8b3dff) 22%, transparent);
+  color: var(--mn-accent-light, #c4a1ff);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.md-currency-text {
+  display: grid;
+  line-height: 1.2;
+}
+.md-currency-text strong {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.md-currency-text small {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+}
 .md-other-currency {
   margin: 10px 0 0;
   color: var(--mn-tertiary, #8a8a95);

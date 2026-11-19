@@ -1,0 +1,199 @@
+/* Home: "Your spending" stats card (week / month comparison + trend line) */
+.mn-spend {
+  margin-bottom: 36px;
+  padding: 20px 18px 16px;
+  border: 1px solid var(--mn-border, #3a3a43);
+  border-radius: 26px;
+  background: var(--mn-surface, #1c1c21);
+}
+.mn-spend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.mn-spend-head h2 {
+  margin: 0;
+  color: #b9b6c0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.mn-spend-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--mn-input, #25252b);
+}
+.mn-spend-toggle button {
+  min-height: 36px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mn-muted, #a8a8b3);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-spend-toggle button.active {
+  background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  color: #fff;
+}
+.mn-spend-toggle button:focus-visible,
+.mn-spend-chart:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+.mn-spend-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 12px;
+}
+.mn-spend-summary > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+.mn-spend-label {
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 14px;
+}
+.mn-spend-value {
+  font-size: clamp(30px, 7vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.mn-spend-change {
+  font-size: 14px;
+  font-weight: 600;
+}
+.mn-spend-change.is-up {
+  color: var(--mn-negative, #ff6b6b);
+}
+.mn-spend-change.is-down {
+  color: var(--mn-positive, #3ddc84);
+}
+.mn-spend-change.is-flat {
+  color: var(--mn-muted, #a8a8b3);
+}
+.mn-spend-facts {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+.mn-spend-facts div {
+  display: grid;
+  gap: 2px;
+}
+.mn-spend-facts dt {
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 13px;
+}
+.mn-spend-facts dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.mn-spend-chart {
+  position: relative;
+  height: 184px;
+  border-radius: 12px;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+.mn-spend-chart svg {
+  display: block;
+  overflow: visible;
+}
+.mn-spend-grid {
+  stroke: #2e2e36;
+  stroke-width: 1;
+}
+.mn-spend-axis {
+  fill: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.mn-spend-axis.is-active {
+  fill: var(--mn-text, #f5f5f7);
+  font-weight: 600;
+}
+.mn-spend-crosshair {
+  stroke: #4a4a55;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.mn-spend-line {
+  fill: none;
+  stroke: #a77bff;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.mn-spend-point {
+  fill: var(--mn-surface, #1c1c21);
+  stroke: #a77bff;
+  stroke-width: 2.5;
+}
+.mn-spend-point.is-current {
+  fill: #a77bff;
+}
+.mn-spend-point.is-active {
+  stroke: #fff;
+  stroke-width: 2;
+  fill: #a77bff;
+}
+.mn-spend-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: grid;
+  gap: 1px;
+  padding: 6px 10px;
+  border: 1px solid #3a3a43;
+  border-radius: 10px;
+  background: #25252b;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  white-space: nowrap;
+  text-align: center;
+}
+.mn-spend-tooltip span {
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 12px;
+}
+.mn-spend-tooltip strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.mn-spend-empty {
+  position: absolute;
+  inset: 30% 12px auto 52px;
+  margin: 0;
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 14px;
+  text-align: center;
+}
+.mn-spend-note {
+  margin: 8px 0 0;
+  color: var(--mn-tertiary, #8a8a95);
+  font-size: 12px;
+}
+.mn-spend-error {
+  margin: 0;
+  color: var(--mn-negative, #ff6b6b);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mn-spend-toggle button {
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+}

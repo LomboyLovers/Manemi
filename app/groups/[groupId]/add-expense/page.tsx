@@ -24,6 +24,7 @@ import {
 
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
+import Avatar from "@/components/Avatar";
 import CategoryIcon from "@/components/CategoryIcon";
 import { notifyDataChanged } from "@/lib/manemi/events";
 import Icon from "@/components/Icon";
@@ -37,7 +38,7 @@ type SaveResponse = { expense?: { expenseId?: string }; expenseId?: string; data
 
 type Group = { groupId: string; name: string; createdBy: string };
 
-type Member = { id: string; name: string };
+type Member = { id: string; name: string; avatarUrl?: string | null };
 
 // Same list as the database's expense_category.
 type Category =
@@ -64,7 +65,6 @@ const RECEIPT_MAX = 5 * 1024 * 1024;
 
 const parseCents = toCents;
 
-const initials = (name: string) => name.trim().charAt(0).toUpperCase() || "?";
 
 export default function AddExpensePage() {
   const router = useRouter();
@@ -98,6 +98,8 @@ export default function AddExpensePage() {
   });
 
   const [category, setCategory] = useState<Category>("Food");
+  // UX-04: how often you've used each category recently (most used first).
+  const [categoryUse, setCategoryUse] = useState<Record<string, number>>({});
 
   const [mode, setMode] = useState<SplitMode>("equally");
 
@@ -189,7 +191,7 @@ export default function AddExpensePage() {
 
       const { data: profiles, error: profileError } = await supabase
         .from("User")
-        .select("userId, name")
+        .select("userId, name, avatarUrl")
         .in("userId", memberIds);
 
       if (!alive) return;
@@ -209,8 +211,12 @@ export default function AddExpensePage() {
         (auth.user.user_metadata?.full_name as string | undefined)?.trim() ||
         auth.user.email?.split("@")[0] ||
         "You";
+      const avatars = new Map(
+        (profiles ?? []).map((profile) => [profile.userId as string, (profile.avatarUrl as string | null) ?? null]),
+      );
       const groupMembers: Member[] = memberIds.map((id) => ({
         id,
+        avatarUrl: avatars.get(id) ?? null,
         name:
           profileNames.get(id)?.trim() ||
           (id === me.id ? displayName : "Group member"),
@@ -220,6 +226,25 @@ export default function AddExpensePage() {
       setUserId(auth.user.id);
       setMembers(groupMembers);
       setWeights(equalWeights(memberIds));
+
+      // Your most-used categories (from expenses you paid recently) come first.
+      const { data: recentCategories } = await supabase
+        .from("Expense")
+        .select("category")
+        .eq("paidBy_UserId", auth.user.id)
+        .order("expenseDate", { ascending: false })
+        .limit(60);
+      if (!alive) return;
+      const use: Record<string, number> = {};
+      for (const row of recentCategories ?? []) {
+        const key = categoryKey(String(row.category ?? ""));
+        use[key] = (use[key] ?? 0) + 1;
+      }
+      setCategoryUse(use);
+      const favorite = categories
+        .filter((item) => (use[item.key] ?? 0) > 0)
+        .sort((a, b) => (use[b.key] ?? 0) - (use[a.key] ?? 0))[0];
+      if (favorite && !editId) setCategory(favorite.name);
       setPayerId(auth.user.id);
 
       if (editId) {
@@ -290,17 +315,26 @@ export default function AddExpensePage() {
   const invalidPercentage =
     mode === "percent" && selected.some((id) => (shareBps[id] ?? 0) > FULL_PERCENT_BPS);
 
-  const validSplit =
+  // Whoever paid must have a share of the expense.
+  const payerHasShare =
+    !payerId || (mode === "equally" ? selected.includes(payerId) : (split[payerId] ?? 0) > 0 || (total <= 0 && (shareBps[payerId] ?? 0) > 0));
+  const payerLabel = payerId === userId ? "You" : members.find((member) => member.id === payerId)?.name ?? "The payer";
+  const splitAddsUp =
     selected.length > 0 &&
     (mode === "equally" ||
       (mode === "exact"
         ? assigned === total
         : percentageBps === FULL_PERCENT_BPS && !invalidPercentage));
+  const validSplit = splitAddsUp && payerHasShare;
 
   /** Switch views. Exact and Percent show the same split; Equally evens it out among the people in it. */
   function changeMode(next: SplitMode) {
     if (next === mode) return;
-    if (next === "equally") setWeights(equalWeights(selected.length ? selected : memberIds));
+    if (next === "equally") {
+      // Everyone who had a share, plus whoever paid.
+      const people = memberIds.filter((member) => member === payerId || selected.includes(member));
+      setWeights(equalWeights(people.length ? people : memberIds));
+    }
     setDraft(null);
     setMode(next);
   }
@@ -475,8 +509,17 @@ export default function AddExpensePage() {
     }
   }
 
-  /** Equally: include or exclude someone, then even out the shares again. */
+  /** Paid by: the new payer always gets a share (Equally adds them back in). */
+  function changePayer(id: string) {
+    setPayerId(id);
+    if (mode === "equally" && !selected.includes(id)) {
+      setWeights(equalWeights(memberIds.filter((member) => member === id || selected.includes(member))));
+    }
+  }
+
+  /** Equally: include or exclude someone, then even out the shares again. The payer stays in. */
   const toggleMember = (id: string) => {
+    if (id === payerId && selected.includes(id)) return;
     const next = memberIds.filter((member) => (member === id ? !selected.includes(member) : selected.includes(member)));
     setWeights(equalWeights(next));
   };
@@ -557,7 +600,7 @@ export default function AddExpensePage() {
                     id="ae-payer"
                     label="Paid by"
                     value={payerId}
-                    onChange={setPayerId}
+                    onChange={changePayer}
                     options={members.map((member) => {
                       const name = member.id === userId ? "You" : member.name;
                       return {
@@ -565,7 +608,7 @@ export default function AddExpensePage() {
                         label: name,
                         icon: (
                           <span className="ae-payer-avatar" aria-hidden="true">
-                            {(member.name || "?").charAt(0).toUpperCase()}
+                            <Avatar name={member.name || "?"} url={member.avatarUrl} />
                           </span>
                         ),
                       };
@@ -643,11 +686,13 @@ export default function AddExpensePage() {
               <div className="ae-section-label">
                 <h2>Category</h2>
 
-                <span>Choose one</span>
+                <span>{Object.keys(categoryUse).length ? "Most used first" : "Choose one"}</span>
               </div>
 
               <div className="ae-categories">
-                {categories.map((item) => (
+                {[...categories]
+                  .sort((a, b) => (categoryUse[b.key] ?? 0) - (categoryUse[a.key] ?? 0))
+                  .map((item) => (
                   <button
                     key={item.name}
                     type="button"
@@ -713,13 +758,21 @@ export default function AddExpensePage() {
                           type="button"
                           className={`ae-check ${included ? "checked" : ""}`}
                           onClick={() => toggleMember(member.id)}
-                          aria-label={`${included ? "Exclude" : "Include"} ${member.name}`}
+                          aria-label={
+                            member.id === payerId && included
+                              ? `${member.name} paid, so they're included`
+                              : `${included ? "Exclude" : "Include"} ${member.name}`
+                          }
+                          aria-disabled={member.id === payerId && included}
+                          title={member.id === payerId && included ? "The person who paid is always part of the split" : undefined}
                         >
                           {included && <Icon name="check" size={16} strokeWidth={3} />}
                         </button>
                       )}
 
-                      <span className="ae-avatar">{initials(member.name)}</span>
+                      <span className="ae-avatar" aria-hidden="true">
+                        <Avatar name={member.name} url={member.avatarUrl} />
+                      </span>
 
                       <div className="ae-member-name">
                         <strong>
@@ -791,13 +844,17 @@ export default function AddExpensePage() {
                         ? `${mode === "percent" ? `${Math.abs(difference).toFixed(2).replace(/\.0+$/, "")}% still unassigned.` : `${money(-difference)} still unassigned.`}`
                         : difference > 0
                           ? `${mode === "percent" ? `${difference.toFixed(2).replace(/\.0+$/, "")}% over the total.` : `${money(difference)} over the expense total.`}`
-                          : "Check the split amounts."}
+                          : !payerHasShare
+                            ? `${payerLabel} paid, so ${payerLabel === "You" ? "you need" : "they need"} a share too.`
+                            : "Check the split amounts."}
                   </strong>
 
                   <span>
                     {validSplit
                       ? "Everyone's share is assigned."
-                      : "Adjust the shares before saving."}
+                      : !payerHasShare && splitAddsUp
+                        ? `Give ${payerLabel === "You" ? "yourself" : payerLabel} part of the amount, or change who paid.`
+                        : "Adjust the shares before saving."}
                   </span>
 
                   <div className="ae-progress">

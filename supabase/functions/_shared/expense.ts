@@ -65,6 +65,15 @@ export const baseSchema = z.object({
 });
 
 export function buildSplits(b: z.infer<typeof baseSchema>): { splits: Split[] } | { error: string } {
+  const built = splitsFor(b);
+  // Whoever paid must have a share of the expense.
+  if ("splits" in built && b.paidBy && !built.splits.some((s) => s.userId === b.paidBy && s.amount > 0)) {
+    return { error: "The person who paid needs a share of the expense. Include them in the split or change who paid" };
+  }
+  return built;
+}
+
+function splitsFor(b: z.infer<typeof baseSchema>): { splits: Split[] } | { error: string } {
   const ids = b.participants.map((p) => p.userId);
   if (new Set(ids).size !== ids.length) return { error: "Duplicate participants" };
   const total = toCents(b.totalAmount);

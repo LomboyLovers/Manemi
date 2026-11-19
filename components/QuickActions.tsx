@@ -78,7 +78,10 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
     ref.current?.querySelector<HTMLElement>("button:not([disabled]):not([aria-disabled='true']), a[href]")?.focus();
   }, [step, groups, ref]);
 
-  const activeGroups = (groups ?? []).filter((group) => !group.isArchived);
+  // UX-04: most recently used groups first.
+  const activeGroups = (groups ?? [])
+    .filter((group) => !group.isArchived)
+    .sort((a, b) => (b.lastActivityAt ?? b.createdAt).localeCompare(a.lastActivityAt ?? a.createdAt));
   const debts = (sign: 1 | -1): Debt[] =>
     (groups ?? [])
       .flatMap((group) =>

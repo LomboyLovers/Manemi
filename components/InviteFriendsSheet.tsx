@@ -1,5 +1,6 @@
 "use client";
 
+import Avatar from "./Avatar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +10,6 @@ import {
   pendingInviteeIds,
   type FriendRow,
 } from "@/lib/manemi/friends";
-import { initialOf } from "@/lib/manemi/format";
 import { useModalFocus } from "./useModalFocus";
 import "./popups.css";
 import "./friends.css";
@@ -171,7 +171,7 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
                         onChange={() => toggle(friend.userId)}
                       />
                       <span className="mn-friend-avatar" aria-hidden="true">
-                        {initialOf(friend.name)}
+                        <Avatar name={friend.name} url={friend.avatarUrl} />
                       </span>
                       <span className="mn-friend-text">
                         <strong>{friend.name}</strong>

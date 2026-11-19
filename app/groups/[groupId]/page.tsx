@@ -14,9 +14,10 @@ import CategoryIcon from "@/components/CategoryIcon";
 import Pagination from "@/components/Pagination";
 import Icon from "@/components/Icon";
 import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
-import { CATEGORY_META, categoryKey, isZero, money, peso } from "@/lib/manemi/format";
+import { CATEGORY_META, categoryKey, CURRENCIES, isZero, money, peso } from "@/lib/manemi/format";
 import { receiptLink } from "@/lib/manemi/functions";
 import { cleanError } from "@/lib/manemi/friends";
+import Avatar from "@/components/Avatar";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PaymentsList, { type PaymentRow } from "@/components/PaymentsList";
 import { buildLedger, paymentEntry, sharesFromSplitRows } from "@/lib/manemi/ledger";
@@ -28,7 +29,7 @@ type Group = {
   isArchived?: boolean | null;
 };
 
-type GroupMember = { userId: string; name: string };
+type GroupMember = { userId: string; name: string; avatarUrl?: string | null };
 type ExpenseSplit = {
   expenseId: string;
   userId: string;
@@ -186,7 +187,7 @@ export default function GroupDetailsPage() {
       // Names and split participants depend on the results above.
       const [usersResult, splitsResult] = await Promise.all([
         memberIds.length
-          ? supabase.from("User").select("userId, name").in("userId", memberIds)
+          ? supabase.from("User").select("userId, name, avatarUrl").in("userId", memberIds)
           : Promise.resolve({ data: [], error: null }),
         expenseIds.length
           ? supabase
@@ -198,6 +199,7 @@ export default function GroupDetailsPage() {
       if (!active) return;
 
       let namesById = new Map<string, string>();
+      const avatarsById = new Map<string, string | null>();
       if (usersResult.error) {
         console.warn("Unable to load member names:", usersResult.error.message);
       } else {
@@ -207,10 +209,14 @@ export default function GroupDetailsPage() {
             String(user.name || "").trim(),
           ]),
         );
+        for (const user of usersResult.data ?? []) {
+          avatarsById.set(user.userId as string, (user.avatarUrl as string | null) ?? null);
+        }
       }
       setMembers(
         memberIds.map((id) => ({
           userId: id,
+          avatarUrl: avatarsById.get(id) ?? null,
           name:
             namesById.get(id) ||
             (id === me.id
@@ -439,12 +445,22 @@ export default function GroupDetailsPage() {
     router.push(`/groups/${params.groupId}/add-expense`);
   };
 
-  const totalExpenses = expenses.reduce(
-    (sum, expense) => sum + Number(expense.totalAmount),
-    0,
+  // Each currency is totalled on its own; the summary's headline and stats are pesos.
+  const totalsByCurrency = expenses.reduce((map, expense) => {
+    const code = String(expense.currency ?? "PHP");
+    const entry = map.get(code) ?? { cents: 0, count: 0 };
+    entry.cents += Math.round(Number(expense.totalAmount) * 100) || 0;
+    entry.count += 1;
+    map.set(code, entry);
+    return map;
+  }, new Map<string, { cents: number; count: number }>());
+  const pesoTotals = totalsByCurrency.get("PHP") ?? { cents: 0, count: 0 };
+  const totalExpenses = pesoTotals.cents / 100;
+  const transactionCount = pesoTotals.count;
+  // Other currencies used in this group, in the app's currency order; none = nothing shown.
+  const otherCurrencyTotals = CURRENCIES.filter((item) => item.code !== "PHP" && totalsByCurrency.has(item.code)).map(
+    (item) => ({ code: item.code, label: item.label, ...totalsByCurrency.get(item.code)! }),
   );
-
-  const transactionCount = expenses.length;
   const categories = [
     "All",
     ...Array.from(
@@ -470,6 +486,7 @@ export default function GroupDetailsPage() {
 
   const memberName = (id: string) =>
     members.find((member) => member.userId === id)?.name || "Unknown member";
+  const memberAvatar = (id: string) => members.find((member) => member.userId === id)?.avatarUrl ?? null;
 
   // People you owe in this group, largest first (for Settle Debts).
   const myDebts = (myBalance?.counterparties ?? [])
@@ -508,15 +525,6 @@ export default function GroupDetailsPage() {
       ? { tone: "negative" as const, label: "You owe", cents: mine, total }
       : { tone: "muted" as const, label: "Not involved", cents: 0, total };
   };
-
-  // Other currencies are listed separately; balances above are in pesos.
-  const otherCurrencyTotals = expenses
-    .filter((expense) => (expense.currency ?? "PHP") !== "PHP")
-    .reduce((map, expense) => {
-      const code = String(expense.currency);
-      map.set(code, (map.get(code) ?? 0) + Number(expense.totalAmount));
-      return map;
-    }, new Map<string, number>());
 
   async function saveName() {
     if (!group) return;
@@ -802,6 +810,27 @@ export default function GroupDetailsPage() {
                   {formatPeso(totalExpenses)}
                 </strong>
 
+                {otherCurrencyTotals.length > 0 && (
+                  <div className="md-currency-block">
+                    <p className="md-currency-heading" id="md-currency-heading">
+                      Other currencies <span>· not in peso balances</span>
+                    </p>
+                    <ul className="md-currency-totals" aria-labelledby="md-currency-heading">
+                      {otherCurrencyTotals.map((item) => (
+                        <li key={item.code} title={item.label}>
+                          <span className="md-currency-code">{item.code}</span>
+                          <span className="md-currency-text">
+                            <strong>{money(item.cents / 100, item.code)}</strong>
+                            <small>
+                              {item.count} {item.count === 1 ? "transaction" : "transactions"}
+                            </small>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <div className="md-stats">
                   <div>
                     <strong>{transactionCount}</strong>
@@ -853,7 +882,7 @@ export default function GroupDetailsPage() {
                       return (
                         <li key={item.userId} className={owesYou ? "is-positive" : "is-negative"}>
                           <span className="md-people-avatar" aria-hidden="true">
-                            {name.charAt(0).toUpperCase()}
+                            <Avatar name={name} url={memberAvatar(item.userId)} />
                           </span>
                           <span className="md-people-name">{owesYou ? `${name} owes you` : `You owe ${name}`}</span>
                           <strong>{formatPeso(Math.abs(item.cents) / 100)}</strong>
@@ -863,13 +892,6 @@ export default function GroupDetailsPage() {
                   </ul>
                 )}
 
-                {otherCurrencyTotals.size > 0 && (
-                  <p className="md-other-currency">
-                    Also spent{" "}
-                    {[...otherCurrencyTotals].map(([code, amount]) => money(amount, code)).join(" + ")}{" "}
-                    in other currencies (not included in peso balances).
-                  </p>
-                )}
 
                 {canAct && (
                   <div className="md-actions">
@@ -961,7 +983,7 @@ export default function GroupDetailsPage() {
                                     className={`md-balance-row ${owesYou ? "md-balance-positive" : "md-balance-negative"}`}
                                   >
                                     <span className="md-balance-avatar" aria-hidden="true">
-                                      {name.charAt(0).toUpperCase()}
+                                      <Avatar name={name} url={memberAvatar(item.userId)} />
                                     </span>
                                     <div className="md-balance-name">
                                       <strong>
@@ -1009,7 +1031,7 @@ export default function GroupDetailsPage() {
                                 return (
                                   <div key={member.userId} className={`md-balance-row ${cls}`}>
                                     <span className="md-balance-avatar" aria-hidden="true">
-                                      {label.charAt(0).toUpperCase()}
+                                      <Avatar name={label} url={memberAvatar(member.userId)} />
                                     </span>
                                     <div className="md-balance-name">
                                       <strong>{label}</strong>
@@ -1057,7 +1079,7 @@ export default function GroupDetailsPage() {
                                     className={`md-balance-row ${mine ? "md-balance-negative" : toMe ? "md-balance-positive" : "md-balance-zero"}`}
                                   >
                                     <span className="md-balance-avatar" aria-hidden="true">
-                                      {(mine ? "You" : memberName(transfer.from)).charAt(0).toUpperCase()}
+                                      <Avatar name={mine ? "You" : memberName(transfer.from)} url={memberAvatar(transfer.from)} />
                                     </span>
                                     <div className="md-balance-name">
                                       <strong>
