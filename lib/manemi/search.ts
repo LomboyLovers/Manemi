@@ -218,7 +218,7 @@ export async function searchGroupIds(supabase: Supabase, query: string): Promise
   const pattern = `%${escapeLike(query)}%`;
   const [byName, byExpense] = await Promise.all([
     supabase.from("Group").select("groupId").ilike("name", pattern).limit(200),
-    supabase.from("Expense").select("groupId").ilike("title", pattern).limit(500),
+    supabase.from("Expense").select("groupId").not("groupId", "is", null).ilike("title", pattern).limit(500),
   ]);
   if (byName.error) throw new Error(`Couldn't search groups: ${byName.error.message}`);
   if (byExpense.error) throw new Error(`Couldn't search expenses: ${byExpense.error.message}`);

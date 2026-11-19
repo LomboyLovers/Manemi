@@ -71,8 +71,9 @@ export default function AddPersonalExpensePage() {
 
       // UX-04: your most used personal categories first.
       const { data: recent } = await supabase
-        .from("Personal_Expense")
+        .from("Expense")
         .select("category")
+        .is("groupId", null)
         .order("expenseDate", { ascending: false })
         .limit(60);
       if (!alive) return;
@@ -130,6 +131,7 @@ export default function AddPersonalExpensePage() {
       if (receiptFile) receiptUrl = await uploadPersonalReceipt(supabase, userId, receiptFile);
       const id = await savePersonal(
         supabase,
+        userId,
         { title, amount: cents / 100, currency, category, day, note, receiptUrl },
         existing?.id,
       );

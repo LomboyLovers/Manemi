@@ -1,5 +1,6 @@
 // Personal expenses: your own costs, with no group and no splitting.
-// Only you can see them (Personal_Expense has owner-only RLS).
+// They are "Expense" rows with groupId = null, paid by you; owner-only RLS
+// means nobody else can see them, and group queries never include them.
 import type { createClient } from "@/lib/supabase/client";
 import type { ReportRow } from "./search";
 
@@ -29,15 +30,15 @@ export type PersonalInput = {
   receiptUrl: string | null;
 };
 
-const COLUMNS = `"personalExpenseId", title, amount, currency, category, "expenseDate", note, "receiptUrl"`;
+const COLUMNS = `"expenseId", title, "totalAmount", currency, category, "expenseDate", note, "receiptUrl"`;
 export const PERSONAL_PAGE_SIZE = 10;
 export const PERSONAL_NOTE_MAX = 500;
 
 function toExpense(row: Record<string, unknown>): PersonalExpense {
   return {
-    id: String(row.personalExpenseId),
+    id: String(row.expenseId),
     title: String(row.title ?? ""),
-    amount: Number(row.amount) || 0,
+    amount: Number(row.totalAmount) || 0,
     currency: String(row.currency ?? "PHP"),
     category: String(row.category ?? "other"),
     date: String(row.expenseDate),
@@ -48,7 +49,8 @@ function toExpense(row: Record<string, unknown>): PersonalExpense {
 
 /** A friendlier message when the table isn't there yet (migration not applied). */
 function failure(action: string, message: string): Error {
-  if (/Personal_Expense|relation .* does not exist|schema cache/i.test(message)) {
+  // Before the personal-expenses migration: no "note" column, and groupId can't be empty.
+  if (/note|groupId.*null|null value in column|schema cache/i.test(message)) {
     return new Error("Personal expenses aren't set up on the server yet.");
   }
   return new Error(`Couldn't ${action}: ${message}`);
@@ -61,10 +63,11 @@ export async function listPersonal(
 ): Promise<{ items: PersonalExpense[]; total: number }> {
   const from = (options.page - 1) * PERSONAL_PAGE_SIZE;
   let query = supabase
-    .from("Personal_Expense")
+    .from("Expense")
     .select(COLUMNS, { count: "exact" })
+    .is("groupId", null)
     .order("expenseDate", { ascending: false })
-    .order("createdAt", { ascending: false })
+    .order("expenseId", { ascending: false })
     .range(from, from + PERSONAL_PAGE_SIZE - 1);
   const term = options.search?.trim();
   if (term) query = query.ilike("title", `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
@@ -75,7 +78,7 @@ export async function listPersonal(
 
 /** Your personal expenses in a date range (both ISO days, inclusive), for totals and charts. */
 export async function personalInRange(supabase: Supabase, fromDay?: string, toDay?: string): Promise<PersonalExpense[]> {
-  let query = supabase.from("Personal_Expense").select(COLUMNS).order("expenseDate", { ascending: false }).limit(2000);
+  let query = supabase.from("Expense").select(COLUMNS).is("groupId", null).order("expenseDate", { ascending: false }).limit(2000);
   if (fromDay) query = query.gte("expenseDate", new Date(`${fromDay}T00:00:00`).toISOString());
   if (toDay) {
     const end = new Date(`${toDay}T00:00:00`);
@@ -88,16 +91,18 @@ export async function personalInRange(supabase: Supabase, fromDay?: string, toDa
 }
 
 export async function getPersonal(supabase: Supabase, id: string): Promise<PersonalExpense | null> {
-  const { data, error } = await supabase.from("Personal_Expense").select(COLUMNS).eq("personalExpenseId", id).maybeSingle();
+  const { data, error } = await supabase.from("Expense").select(COLUMNS).eq("expenseId", id).is("groupId", null).maybeSingle();
   if (error) throw failure("open that expense", error.message);
   return data ? toExpense(data as Record<string, unknown>) : null;
 }
 
-/** Creates (no id) or updates (id) a personal expense; returns its id. */
-export async function savePersonal(supabase: Supabase, input: PersonalInput, id?: string): Promise<string> {
+/** Creates (no id) or updates (id) one of your personal expenses; returns its id. */
+export async function savePersonal(supabase: Supabase, userId: string, input: PersonalInput, id?: string): Promise<string> {
   const row = {
+    groupId: null,
+    paidBy_UserId: userId,
     title: input.title.trim(),
-    amount: input.amount,
+    totalAmount: input.amount,
     currency: input.currency,
     category: input.category,
     expenseDate: new Date(`${input.day}T12:00:00`).toISOString(),
@@ -105,14 +110,14 @@ export async function savePersonal(supabase: Supabase, input: PersonalInput, id?
     receiptUrl: input.receiptUrl,
   };
   const result = id
-    ? await supabase.from("Personal_Expense").update(row).eq("personalExpenseId", id).select("personalExpenseId").single()
-    : await supabase.from("Personal_Expense").insert(row).select("personalExpenseId").single();
+    ? await supabase.from("Expense").update(row).eq("expenseId", id).is("groupId", null).select("expenseId").single()
+    : await supabase.from("Expense").insert(row).select("expenseId").single();
   if (result.error) throw failure("save the expense", result.error.message);
-  return String((result.data as Record<string, unknown>).personalExpenseId);
+  return String((result.data as Record<string, unknown>).expenseId);
 }
 
 export async function deletePersonal(supabase: Supabase, expense: PersonalExpense): Promise<void> {
-  const { error } = await supabase.from("Personal_Expense").delete().eq("personalExpenseId", expense.id);
+  const { error } = await supabase.from("Expense").delete().eq("expenseId", expense.id).is("groupId", null);
   if (error) throw failure("delete the expense", error.message);
   await removePersonalReceipt(supabase, expense.receiptUrl);
 }

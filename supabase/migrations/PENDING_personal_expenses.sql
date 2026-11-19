@@ -1,64 +1,49 @@
 -- =====================================================================
--- Personal expenses: your own costs, no group, no splitting.
--- Only the owner can see or change them (RLS). Receipts go in the private
--- receipts bucket under personal/<userId>/..., readable only by the owner.
+-- Personal expenses live in "Expense" with no group:
+--   groupId IS NULL, owned by paidBy_UserId (the user who made it).
+-- Group expenses are unchanged: they still go through the group RPCs, and
+-- every balance / history / report query filters by group, so personal
+-- rows never enter group math.
+-- Only the owner can see or change a personal expense (RLS). Receipts go in
+-- the private receipts bucket under personal/<userId>/..., owner only.
 -- =====================================================================
 
-create table if not exists public."Personal_Expense" (
-  "personalExpenseId" uuid primary key default gen_random_uuid(),
-  "userId"      uuid not null default auth.uid() references public."User" ("userId") on delete cascade,
-  title         varchar(100) not null check (length(btrim(title)) between 1 and 100),
-  amount        numeric(10, 2) not null check (amount > 0 and amount <= 99999999.99),
-  currency      text not null default 'PHP' check (currency in ('PHP', 'USD', 'EUR', 'JPY', 'KRW')),
-  category      public.expense_category not null default 'other',
-  "expenseDate" timestamptz not null default now(),
-  note          text check (note is null or length(note) <= 500),
-  "receiptUrl"  text,
-  "createdAt"   timestamptz not null default now(),
-  "updatedAt"   timestamptz not null default now()
-);
-create index if not exists "Personal_Expense_user_date_idx"
-  on public."Personal_Expense" ("userId", "expenseDate" desc);
+alter table public."Expense" alter column "groupId" drop not null;
 
-alter table public."Personal_Expense" enable row level security;
+alter table public."Expense" add column if not exists note text;
+do $$ begin
+  alter table public."Expense" add constraint expense_note_length check (note is null or length(note) <= 500);
+exception when duplicate_object then null; end $$;
 
-drop policy if exists "Owner reads personal expenses" on public."Personal_Expense";
-drop policy if exists "Owner adds personal expenses" on public."Personal_Expense";
-drop policy if exists "Owner edits personal expenses" on public."Personal_Expense";
-drop policy if exists "Owner deletes personal expenses" on public."Personal_Expense";
-create policy "Owner reads personal expenses" on public."Personal_Expense"
-  for select to authenticated using ("userId" = (select auth.uid()));
-create policy "Owner adds personal expenses" on public."Personal_Expense"
-  for insert to authenticated with check ("userId" = (select auth.uid()));
-create policy "Owner edits personal expenses" on public."Personal_Expense"
+-- Personal expenses need a real title (group expenses are checked by their RPCs).
+do $$ begin
+  alter table public."Expense" add constraint expense_personal_title
+    check ("groupId" is not null or length(btrim(title)) between 1 and 100);
+exception when duplicate_object then null; end $$;
+
+create index if not exists "Expense_personal_owner_date_idx"
+  on public."Expense" ("paidBy_UserId", "expenseDate" desc)
+  where "groupId" is null;
+
+-- Owner-only access to personal (no-group) expenses. Group expenses keep
+-- "Members can view expenses" and stay write-only through the RPCs.
+drop policy if exists "Owner reads personal expenses" on public."Expense";
+drop policy if exists "Owner adds personal expenses" on public."Expense";
+drop policy if exists "Owner edits personal expenses" on public."Expense";
+drop policy if exists "Owner deletes personal expenses" on public."Expense";
+create policy "Owner reads personal expenses" on public."Expense"
+  for select to authenticated
+  using ("groupId" is null and "paidBy_UserId" = (select auth.uid()));
+create policy "Owner adds personal expenses" on public."Expense"
+  for insert to authenticated
+  with check ("groupId" is null and "paidBy_UserId" = (select auth.uid()));
+create policy "Owner edits personal expenses" on public."Expense"
   for update to authenticated
-  using ("userId" = (select auth.uid()))
-  with check ("userId" = (select auth.uid()));
-create policy "Owner deletes personal expenses" on public."Personal_Expense"
-  for delete to authenticated using ("userId" = (select auth.uid()));
-
-revoke all on public."Personal_Expense" from anon;
-grant select, insert, update, delete on public."Personal_Expense" to authenticated;
-
--- Keep updatedAt current and stop rows from moving to another owner.
-create or replace function public._personal_expense_touch()
-returns trigger
-language plpgsql
-set search_path = ''
-as $$
-begin
-  new."updatedAt" := now();
-  if tg_op = 'UPDATE' then
-    new."userId" := old."userId";
-    new."createdAt" := old."createdAt";
-  end if;
-  return new;
-end;
-$$;
-drop trigger if exists personal_expense_touch on public."Personal_Expense";
-create trigger personal_expense_touch
-  before insert or update on public."Personal_Expense"
-  for each row execute function public._personal_expense_touch();
+  using ("groupId" is null and "paidBy_UserId" = (select auth.uid()))
+  with check ("groupId" is null and "paidBy_UserId" = (select auth.uid()));
+create policy "Owner deletes personal expenses" on public."Expense"
+  for delete to authenticated
+  using ("groupId" is null and "paidBy_UserId" = (select auth.uid()));
 
 -- ---------- receipts for personal expenses (private, owner only) ----------
 drop policy if exists "Owner reads personal receipts" on storage.objects;

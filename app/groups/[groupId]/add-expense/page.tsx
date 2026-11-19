@@ -232,6 +232,7 @@ export default function AddExpensePage() {
         .from("Expense")
         .select("category")
         .eq("paidBy_UserId", auth.user.id)
+        .not("groupId", "is", null)
         .order("expenseDate", { ascending: false })
         .limit(60);
       if (!alive) return;
