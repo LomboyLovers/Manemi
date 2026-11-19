@@ -12,6 +12,7 @@ import Pagination from "@/components/Pagination";
 import { CATEGORY_META, categoryKey, money, peso, type CategoryKey } from "@/lib/manemi/format";
 import { loadGroupsDataCached, type CurrentUser, type GroupSummary } from "@/lib/manemi/groups";
 import { reportExpenses, type ReportRow } from "@/lib/manemi/search";
+import { personalAsReportRows, personalInRange } from "@/lib/manemi/personal";
 import { useDataVersion } from "@/lib/manemi/events";
 import "./reports.css";
 
@@ -80,7 +81,21 @@ export default function ReportsPage() {
     let active = true;
     setLoading(true);
     setError("");
-    reportExpenses(createClient(), user.id, { groupId, from: range.from, to: range.to })
+    const supabase = createClient();
+    // "all" = every group plus personal expenses; "personal" = personal only.
+    const groupRows =
+      groupId === "personal" ? Promise.resolve([]) : reportExpenses(supabase, user.id, { groupId, from: range.from, to: range.to });
+    const personalRows =
+      groupId === "all" || groupId === "personal"
+        ? personalInRange(supabase, range.from, range.to)
+            .then(personalAsReportRows)
+            .catch((reason: unknown) => {
+              if (groupId === "personal") throw reason;
+              return [] as ReportRow[];
+            })
+        : Promise.resolve([] as ReportRow[]);
+    Promise.all([groupRows, personalRows])
+      .then(([fromGroups, personal]) => [...fromGroups, ...personal].sort((a, b) => (a.date < b.date ? 1 : -1)))
       .then((list) => {
         if (!active) return;
         setRows(list);
@@ -115,7 +130,12 @@ export default function ReportsPage() {
   const balances = groups
     .filter((group) => groupId === "all" || group.id === groupId)
     .filter((group) => group.net !== 0 || groupId !== "all");
-  const groupName = groupId === "all" ? "All groups" : groups.find((group) => group.id === groupId)?.name ?? "Group";
+  const groupName =
+    groupId === "all"
+      ? "All groups + personal"
+      : groupId === "personal"
+        ? "Personal expenses"
+        : groups.find((group) => group.id === groupId)?.name ?? "Group";
   const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
@@ -146,7 +166,11 @@ export default function ReportsPage() {
             value={groupId}
             active={groupId !== "all"}
             onChange={setGroupId}
-            options={[{ value: "all", label: "All groups" }, ...groups.map((group) => ({ value: group.id, label: group.name }))]}
+            options={[
+              { value: "all", label: "All groups + personal" },
+              { value: "personal", label: "Personal only" },
+              ...groups.map((group) => ({ value: group.id, label: group.name })),
+            ]}
           />
           <Select
             variant="chip"
@@ -234,7 +258,9 @@ export default function ReportsPage() {
 
           <section className="mn-reports-card" aria-labelledby="balances-title">
             <h2 id="balances-title">Balances right now</h2>
-            {balances.length ? (
+            {groupId === "personal" ? (
+              <p className="mn-reports-empty">Personal expenses are yours alone, so they have no balances.</p>
+            ) : balances.length ? (
               <ul className="mn-reports-balances">
                 {balances.map((group) => (
                   <li key={group.id}>
@@ -300,7 +326,15 @@ function ReportTableRow({ row }: { row: ReportRow }) {
     <tr>
       <td>{new Date(row.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</td>
       <td>
-        <Link href={`/groups/${row.groupId}?expense=${encodeURIComponent(row.id)}`}>{row.title}</Link>
+        <Link
+          href={
+            row.groupId === "personal"
+              ? `/personal/add?edit=${encodeURIComponent(row.id)}`
+              : `/groups/${row.groupId}?expense=${encodeURIComponent(row.id)}`
+          }
+        >
+          {row.title}
+        </Link>
       </td>
       <td>{row.groupName}</td>
       <td>{CATEGORY_META[categoryKey(row.category)].label}</td>

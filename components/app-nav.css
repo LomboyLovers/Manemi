@@ -280,3 +280,10 @@
     background: var(--mn-input, #25252b);
   }
 }
+
+/* Sidebar-only links (no room in the phone tab bar) */
+@media (max-width: 767.98px) {
+  .mn-nav-link.mn-nav-desktop-only {
+    display: none;
+  }
+}

@@ -164,6 +164,8 @@ export default function Dashboard() {
         )}
 
 
+        {!loading && groups.length === 0 && !loadError && user && <SpendingStats userId={user.id} />}
+
         {!loading && groups.length === 0 && !loadError && (
           <section className="mn-home-empty" aria-labelledby="home-empty-title">
             <div className="mn-home-empty-icon" aria-hidden="true">
@@ -190,6 +192,12 @@ export default function Dashboard() {
               </Link>
             </div>
             <small>Invited by a friend? Accept it from the bell at the top.</small>
+            <small>
+              Just tracking your own spending?{" "}
+              <Link href="/personal/add" className="mn-home-empty-link">
+                Add a personal expense
+              </Link>
+            </small>
           </section>
         )}
 

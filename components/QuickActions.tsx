@@ -178,8 +178,9 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
             <QuickRow
               icon={Icon.user}
               title="Personal expense"
-              detail="Just for you · coming soon"
-              disabled
+              detail="Just for you, no group needed"
+              onClick={() => router.push("/personal/add")}
+              chevron
             />
           </div>
         )}

@@ -194,6 +194,15 @@
   color: var(--mn-tertiary, #8a8a95);
   font-size: 12px;
 }
+.mn-spend-note a {
+  color: var(--mn-accent-light, #c4a1ff);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mn-spend-note a:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
 .mn-spend-error {
   margin: 0;
   color: var(--mn-negative, #ff6b6b);

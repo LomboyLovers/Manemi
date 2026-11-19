@@ -3495,3 +3495,8 @@ button:disabled {
   .md-people-avatar, .md-balance-avatar, .ae-avatar, .ae-payer-avatar) {
   overflow: hidden;
 }
+
+.mn-home-empty-link {
+  color: var(--mn-accent-light, #c4a1ff);
+  font-weight: 600;
+}

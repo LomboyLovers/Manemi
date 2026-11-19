@@ -2,7 +2,9 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 import { reportExpenses, type ReportRow } from "@/lib/manemi/search";
+import { personalAsReportRows, personalInRange } from "@/lib/manemi/personal";
 import { peso } from "@/lib/manemi/format";
 import { useDataVersion } from "@/lib/manemi/events";
 import {
@@ -36,8 +38,14 @@ export default function SpendingStats({ userId }: { userId: string }) {
   useEffect(() => {
     let alive = true;
     setError("");
-    reportExpenses(createClient(), userId, { groupId: "all", from: toIsoDay(earliestNeeded(new Date())) })
-      .then((list) => alive && setRows(list))
+    const supabase = createClient();
+    const from = toIsoDay(earliestNeeded(new Date()));
+    Promise.all([
+      reportExpenses(supabase, userId, { groupId: "all", from }),
+      // Personal expenses count in full; if they aren't available, the card still works.
+      personalInRange(supabase, from).catch(() => []),
+    ])
+      .then(([groupRows, personal]) => alive && setRows([...groupRows, ...personalAsReportRows(personal)]))
       .catch((reason: unknown) => alive && setError(reason instanceof Error ? reason.message : "Couldn't load your spending."));
     return () => {
       alive = false;
@@ -254,7 +262,10 @@ export default function SpendingStats({ userId }: { userId: string }) {
               ))}
             </tbody>
           </table>
-          <p className="mn-spend-note">Your share of expenses in pesos, across all your groups.</p>
+          <p className="mn-spend-note">
+            Your share of group expenses plus your personal expenses, in pesos.{" "}
+            <Link href="/personal">Personal expenses</Link>
+          </p>
         </>
       )}
     </section>

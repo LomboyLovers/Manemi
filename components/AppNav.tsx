@@ -12,15 +12,24 @@ import AccountSheet from "./AccountSheet";
 import Avatar from "./Avatar";
 import "./app-nav.css";
 
-export type NavSection = "home" | "groups" | "friends" | "history" | "reports";
+export type NavSection = "home" | "groups" | "friends" | "history" | "reports" | "personal";
 
-const ITEMS: Array<{ id: NavSection; href: string; label: string; icon: string }> = [
+const ITEMS: Array<{ id: NavSection; href: string; label: string; icon: string; desktopOnly?: boolean }> = [
   { id: "home", href: "/dashboard", label: "Home", icon: "home" },
   { id: "groups", href: "/groups", label: "Groups", icon: "group" },
   { id: "friends", href: "/friends", label: "Friends", icon: "friends" },
   { id: "history", href: "/history", label: "History", icon: "clock" },
   { id: "reports", href: "/reports", label: "Reports", icon: "reports" },
+  // Phones have no room for a 6th tab: Personal is on Home and in the + menu there.
+  { id: "personal", href: "/personal", label: "Personal", icon: "personal", desktopOnly: true },
 ];
+
+const PersonalIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M19 7V5.5A1.5 1.5 0 0 0 17.5 4h-12A1.5 1.5 0 0 0 4 5.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5.5A1.5 1.5 0 0 1 4 5.5" />
+    <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
 
 const ReportsIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -79,13 +88,15 @@ export default function AppNav({ active, groups }: Props) {
             <Link
               key={item.id}
               href={item.href}
-              className={`mn-nav-link ${active === item.id ? "is-active" : ""}`}
+              className={`mn-nav-link ${active === item.id ? "is-active" : ""} ${item.desktopOnly ? "mn-nav-desktop-only" : ""}`}
               aria-current={active === item.id ? "page" : undefined}
             >
               {item.icon === "friends" ? (
               <FriendsIcon />
             ) : item.icon === "reports" ? (
               <ReportsIcon />
+            ) : item.icon === "personal" ? (
+              <PersonalIcon />
             ) : (
               <Image src={`/icons/${item.icon}.png`} alt="" width={20} height={20} />
             )}
