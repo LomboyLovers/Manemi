@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadGroupsDataCached, type GroupSummary } from "@/lib/manemi/groups";
 import { peso } from "@/lib/manemi/format";
+import { callFunction } from "@/lib/manemi/functions";
 import { useModalFocus } from "./useModalFocus";
 import SettleUpForm from "./SettleUpForm";
 import "./popups.css";
@@ -98,18 +99,54 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
       )
       .sort((a, b) => b.amount - a.amount);
 
+  // Reminders sent in the last 12 hours (one per person per group): those rows show "Reminded".
+  const [reminded, setReminded] = useState<Record<string, "sending" | "sent">>({});
+  useEffect(() => {
+    if (step !== "request") return;
+    let active = true;
+    (async () => {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+      const since = new Date(Date.now() - 12 * 3_600_000).toISOString();
+      const { data } = await supabase
+        .from("Payment_Reminder")
+        .select("groupId, toUserId")
+        .eq("fromUserId", session.user.id)
+        .gte("createdAt", since);
+      if (!active || !data) return;
+      setReminded((state) => {
+        const next = { ...state };
+        for (const row of data as Array<{ groupId: string; toUserId: string }>) next[`${row.groupId}-${row.toUserId}`] = "sent";
+        return next;
+      });
+    })().catch(() => undefined); // just means every row shows "Remind"
+    return () => {
+      active = false;
+    };
+  }, [step]);
+
+  /** Emails them (if they allow payment emails) and puts the reminder in their bell. */
   async function remind(debt: Debt) {
-    const text = `Hi ${debt.name}! Friendly reminder from Manemi: you owe me ${peso(debt.amount)} for "${debt.groupName}".`;
+    if (reminded[debt.key]) return;
+    setNotice("");
+    setReminded((state) => ({ ...state, [debt.key]: "sending" }));
     try {
-      if (navigator.share) {
-        await navigator.share({ text });
-        setNotice(`Reminder ready for ${debt.name}.`);
-      } else {
-        await navigator.clipboard.writeText(text);
-        setNotice(`Reminder copied. Paste it to ${debt.name}.`);
-      }
+      await callFunction("send-reminder", { groupId: debt.groupId, toUserId: debt.userId, amount: debt.amount });
+      setReminded((state) => ({ ...state, [debt.key]: "sent" }));
+      setNotice(`Reminder sent to ${debt.name}.`);
     } catch (error) {
-      if ((error as Error)?.name !== "AbortError") setNotice("Couldn't share the reminder. Try again.");
+      const message = error instanceof Error ? error.message : "Couldn't send the reminder. Try again.";
+      const already = message.startsWith("You already reminded");
+      setReminded((state) => {
+        const next = { ...state };
+        if (already) next[debt.key] = "sent";
+        else delete next[debt.key];
+        return next;
+      });
+      setNotice(message.replace("them", debt.name));
     }
   }
 
@@ -281,7 +318,14 @@ export default function QuickActions({ onClose, groups: given, initialStep = "me
                           title={`${debt.name} owes you`}
                           detail={`${peso(debt.amount)} · ${debt.groupName}`}
                           tone="positive"
-                          action="Remind"
+                          action={
+                            reminded[debt.key] === "sending"
+                              ? "Sending…"
+                              : reminded[debt.key] === "sent"
+                                ? "Reminded"
+                                : "Remind"
+                          }
+                          disabled={Boolean(reminded[debt.key])}
                           onClick={() => void remind(debt)}
                         />
                       ),

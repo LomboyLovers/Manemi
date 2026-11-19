@@ -800,3 +800,21 @@
   outline: 2px solid var(--mn-accent-light, #c4a1ff);
   outline-offset: 2px;
 }
+
+/* Request Payment: a row whose reminder was just sent stays readable;
+   only its button turns into a quiet "Reminded" label. */
+.mn-quick-row.is-positive[aria-disabled="true"] {
+  opacity: 1;
+  cursor: default;
+}
+.mn-quick-row.is-positive[aria-disabled="true"] .mn-quick-action {
+  background: transparent;
+  color: var(--mn-tertiary, #8a8a95);
+  padding: 0 4px;
+}
+.mn-quick-action {
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1), color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mn-quick-action { transition: none; }
+}

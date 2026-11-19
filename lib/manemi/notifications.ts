@@ -1,5 +1,6 @@
 // In-app activity notifications (bell): new, edited and deleted expenses that
-// include you, and payments you made or received, entered by someone else.
+// include you, payments you made or received, entered by someone else, and
+// payment reminders sent to you.
 // Read from the database (list_activity_notifications); "read" is stored per
 // user (mark_notifications_seen), so it follows you across devices.
 
@@ -14,6 +15,8 @@ export type ActivityNotification = {
   groupName: string;
   action: string;
   actorName: string;
+  /** Where tapping it goes: the group, or its settle-up screen for reminders. */
+  href: string;
   /** Who did it, as a short sentence: "Ben added Dinner". */
   text: { actor: string; verb: string; object: string };
   /** Secondary line: "Your share ₱250.00" or the amount. */
@@ -81,6 +84,11 @@ export function describeNotification(row: Row, me: string): ActivityNotification
       object = receiver;
       detail = peso(amount);
       break;
+    case "payment_reminder":
+      verb = "reminded you to pay";
+      object = peso(amount);
+      detail = "Tap to settle up";
+      break;
     default:
       verb = "updated";
       object = title;
@@ -103,6 +111,7 @@ export function describeNotification(row: Row, me: string): ActivityNotification
     groupName: row.group_name ?? "",
     action: row.action,
     actorName: actor,
+    href: row.action === "payment_reminder" ? `/groups/${row.group_id}?settle=1` : `/groups/${row.group_id}`,
     text: { actor, verb, object },
     detail,
     date: row.created_at,

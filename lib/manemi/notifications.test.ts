@@ -47,3 +47,11 @@ test("timeAgo", () => {
   assert.equal(timeAgo("2026-11-20T09:00:00Z", now), "3h");
   assert.equal(timeAgo("2026-11-18T12:00:00Z", now), "2d");
 });
+
+test("payment reminder links to settle up", () => {
+  const n = describeNotification({ ...base, action: "payment_reminder", title: null, amount: 250, your_share: 250, receiver_id: "u1" }, "u1");
+  assert.deepEqual(n.text, { actor: "Ben", verb: "reminded you to pay", object: "₱250.00" });
+  assert.equal(n.detail, "Tap to settle up");
+  assert.equal(n.href, "/groups/g1?settle=1");
+  assert.equal(describeNotification(base, "u1").href, "/groups/g1");
+});

@@ -290,7 +290,7 @@ export default function NotificationsBell({ onChange }: Props) {
                 {activity.map((item) => (
                   <li key={item.id}>
                     <Link
-                      href={`/groups/${item.groupId}`}
+                      href={item.href}
                       className={`mn-activity-item${item.unread ? " is-unread" : ""}`}
                       onClick={() => setOpen(false)}
                     >

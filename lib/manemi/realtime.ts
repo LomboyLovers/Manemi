@@ -25,6 +25,7 @@ const WATCHED = [
   "Group_Member", // someone joined one of your groups
   "Group_Invitation", // invited / invitation answered
   "Friendship", // friend request sent / accepted
+  "Payment_Reminder", // someone reminded you to pay
 ];
 
 let users = 0;
