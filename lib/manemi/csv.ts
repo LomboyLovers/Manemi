@@ -31,7 +31,22 @@ export function csvField(value: string | number): string {
   return /[",]/.test(text) || text !== text.trim() ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** The whole file: UTF-8 BOM (so Excel shows ñ, é, emoji), header, one row per expense, CRLF lines. */
+/** One total per currency (never adds pesos to dollars), in cents so it never drifts. PHP first. */
+export function csvTotals(rows: CsvExpense[]): Array<{ currency: string; amount: number; yourShare: number; count: number }> {
+  const byCurrency = new Map<string, { amount: number; yourShare: number; count: number }>();
+  for (const row of rows) {
+    const entry = byCurrency.get(row.currency) ?? { amount: 0, yourShare: 0, count: 0 };
+    entry.amount += Math.round(row.amount * 100);
+    entry.yourShare += Math.round(row.yourShare * 100);
+    entry.count += 1;
+    byCurrency.set(row.currency, entry);
+  }
+  return [...byCurrency]
+    .map(([currency, entry]) => ({ currency, amount: entry.amount / 100, yourShare: entry.yourShare / 100, count: entry.count }))
+    .sort((a, b) => (a.currency === "PHP" ? -1 : b.currency === "PHP" ? 1 : a.currency.localeCompare(b.currency)));
+}
+
+/** The whole file: UTF-8 BOM (so Excel shows ñ, é, emoji), header, one row per expense, a TOTAL row per currency, CRLF lines. */
 export function expensesToCsv(rows: CsvExpense[], categoryLabel: (key: string) => string = (key) => key): string {
   const lines = [CSV_HEADER.map(csvField).join(",")];
   for (const row of rows) {
@@ -46,6 +61,13 @@ export function expensesToCsv(rows: CsvExpense[], categoryLabel: (key: string) =
         row.currency,
         row.yourShare,
       ]
+        .map(csvField)
+        .join(","),
+    );
+  }
+  for (const total of csvTotals(rows)) {
+    lines.push(
+      ["", `TOTAL (${total.count} ${total.count === 1 ? "expense" : "expenses"})`, "", "", "", total.amount, total.currency, total.yourShare]
         .map(csvField)
         .join(","),
     );

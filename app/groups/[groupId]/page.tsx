@@ -18,6 +18,8 @@ import { notifyDataChanged, useDataVersion } from "@/lib/manemi/events";
 import { CATEGORY_META, categoryKey, CURRENCIES, isZero, money, peso } from "@/lib/manemi/format";
 import { receiptLink } from "@/lib/manemi/functions";
 import { cleanError } from "@/lib/manemi/friends";
+import { editedLabel, latestEdits, type EditRow, type LastEdit } from "@/lib/manemi/edits";
+import { timeAgo } from "@/lib/manemi/notifications";
 import RawBreakdown from "@/components/RawBreakdown";
 import Avatar from "@/components/Avatar";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -70,6 +72,7 @@ export default function GroupDetailsPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   // When each expense was added (from the audit log), for "newest first".
   const [addedAt, setAddedAt] = useState<Map<string, string>>(new Map());
+  const [edits, setEdits] = useState<Map<string, LastEdit>>(new Map());
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [myRole, setMyRole] = useState<"owner" | "admin" | "member">("member");
   // Completed settle-ups: they cancel the debts they pay back.
@@ -161,21 +164,22 @@ export default function GroupDetailsPage() {
             .eq("status", "completed"),
           supabase
             .from("Group_Activity")
-            .select("entityId, createdAt")
+            .select("entityId, actorId, action, createdAt")
             .eq("groupId", params.groupId)
-            .eq("action", "expense_created"),
+            .in("action", ["expense_created", "expense_updated"]),
         ]);
 
       if (!active) return;
 
+      const activityRows = (addedResult.data ?? []) as Array<EditRow>;
       setAddedAt(
         new Map(
-          ((addedResult.data ?? []) as Array<{ entityId: string; createdAt: string }>).map((row) => [
-            String(row.entityId),
-            String(row.createdAt),
-          ]),
+          activityRows
+            .filter((row) => row.action === "expense_created")
+            .map((row) => [String(row.entityId), String(row.createdAt)]),
         ),
       );
+      setEdits(latestEdits(activityRows));
 
       const { data: memberRows, error: memberError } = rosterResult;
       if (memberError) {
@@ -538,6 +542,8 @@ export default function GroupDetailsPage() {
 
   const memberName = (id: string) =>
     members.find((member) => member.userId === id)?.name || "Unknown member";
+  const editedBy = (expenseId: string) =>
+    editedLabel(edits.get(expenseId), currentUserId, (id) => members.find((member) => member.userId === id)?.name ?? null);
   const memberAvatar = (id: string) => members.find((member) => member.userId === id)?.avatarUrl ?? null;
 
   // People you owe in this group, largest first (for Settle Debts).
@@ -1300,6 +1306,11 @@ export default function GroupDetailsPage() {
                                 },
                               )}
                             </small>
+                            {edits.has(expense.expenseId) && (
+                              <span className="md-edited" title={new Date(edits.get(expense.expenseId)!.at).toLocaleString("en-PH")}>
+                                {editedBy(expense.expenseId)} · {timeAgo(edits.get(expense.expenseId)!.at)}
+                              </span>
+                            )}
                           </div>
 
                           <div className="md-transaction-amount">
@@ -1461,6 +1472,21 @@ export default function GroupDetailsPage() {
                       )}
                     </strong>
                   </div>
+                  {edits.has(selectedExpense.expenseId) && (
+                    <div>
+                      <span>Last edited</span>
+                      <strong>
+                        {editedBy(selectedExpense.expenseId).replace(/^Edited( by)? ?/, "") || "Someone"}
+                        {" · "}
+                        {new Date(edits.get(selectedExpense.expenseId)!.at).toLocaleString("en-PH", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </strong>
+                    </div>
+                  )}
                 </div>
 
                 {selectedExpense.receiptUrl && (

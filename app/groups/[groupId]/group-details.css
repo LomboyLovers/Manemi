@@ -1866,3 +1866,22 @@
   color: var(--mn-tertiary, #8a8a95);
   overflow-wrap: anywhere;
 }
+
+/* "Edited by Maria · 2h" under the date, visible to everyone in the group */
+.md-edited {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #ffb547 14%, transparent);
+  color: #ffb547;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

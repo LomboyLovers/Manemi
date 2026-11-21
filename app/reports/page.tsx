@@ -55,7 +55,8 @@ export default function ReportsPage() {
   const [groupId, setGroupId] = useState("all");
   const [period, setPeriod] = useState<Period>("month");
   const [custom, setCustom] = useState(() => rangeFor("month"));
-  const [rows, setRows] = useState<ReportRow[]>([]);
+  const [allRows, setAllRows] = useState<ReportRow[]>([]);
+  const [category, setCategory] = useState<"all" | CategoryKey>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
@@ -99,7 +100,7 @@ export default function ReportsPage() {
       .then(([fromGroups, personal]) => [...fromGroups, ...personal].sort((a, b) => (a.date < b.date ? 1 : -1)))
       .then((list) => {
         if (!active) return;
-        setRows(list);
+        setAllRows(list);
         setPage(1);
       })
       .catch((reason: unknown) => active && setError(reason instanceof Error ? reason.message : "Couldn't load the report."))
@@ -109,24 +110,54 @@ export default function ReportsPage() {
     };
   }, [user, groupId, range.from, range.to, dataVersion]);
 
+  // Everything below follows the Category filter; the category bars stay on all
+  // categories so another one is one click away.
+  const rows = useMemo(
+    () => (category === "all" ? allRows : allRows.filter((row) => categoryKey(row.category) === category)),
+    [allRows, category],
+  );
+
+  const categoryReport = useMemo(() => {
+    if (category === "all") return null;
+    const php = rows.filter((row) => row.currency === "PHP");
+    const byGroup = new Map<string, { id: string; name: string; count: number; total: number }>();
+    const byMonth = new Map<string, number>();
+    for (const row of php) {
+      const entry = byGroup.get(row.groupId) ?? { id: row.groupId, name: row.groupName, count: 0, total: 0 };
+      entry.count += 1;
+      entry.total += row.amount;
+      byGroup.set(row.groupId, entry);
+      const month = row.date.slice(0, 7);
+      byMonth.set(month, (byMonth.get(month) ?? 0) + row.amount);
+    }
+    const months = [...byMonth].sort(([a], [b]) => (a < b ? -1 : 1)).map(([month, total]) => ({ month, total }));
+    return {
+      groups: [...byGroup.values()].sort((a, b) => b.total - a.total),
+      months,
+      peak: months.reduce((max, item) => Math.max(max, item.total), 0),
+    };
+  }, [rows, category]);
+
   // Totals are in pesos; other currencies are listed separately.
   const report = useMemo(() => {
     const php = rows.filter((row) => row.currency === "PHP");
+    const phpAll = allRows.filter((row) => row.currency === "PHP");
+    const totalAll = phpAll.reduce((sum, row) => sum + row.amount, 0);
     const total = php.reduce((sum, row) => sum + row.amount, 0);
     const yours = php.reduce((sum, row) => sum + row.yourShare, 0);
     const byCategory = new Map<CategoryKey, number>();
-    for (const row of php) {
+    for (const row of phpAll) {
       const key = categoryKey(row.category);
       byCategory.set(key, (byCategory.get(key) ?? 0) + row.amount);
     }
     const categories = [...byCategory]
-      .map(([key, amount]) => ({ key, amount, share: total ? amount / total : 0 }))
+      .map(([key, amount]) => ({ key, amount, share: totalAll ? amount / totalAll : 0 }))
       .sort((a, b) => b.amount - a.amount);
     const other = new Map<string, number>();
     for (const row of rows) if (row.currency !== "PHP") other.set(row.currency, (other.get(row.currency) ?? 0) + row.amount);
     const largest = php.reduce<ReportRow | null>((max, row) => (!max || row.amount > max.amount ? row : max), null);
     return { total, yours, count: rows.length, phpCount: php.length, categories, other, largest };
-  }, [rows]);
+  }, [rows, allRows]);
 
   const balances = groups
     .filter((group) => groupId === "all" || group.id === groupId)
@@ -137,6 +168,8 @@ export default function ReportsPage() {
       : groupId === "personal"
         ? "Personal expenses"
         : groups.find((group) => group.id === groupId)?.name ?? "Group";
+  const categoryLabel = category === "all" ? "" : CATEGORY_META[category].label;
+  const exportScope = categoryLabel ? `${groupName} ${categoryLabel}` : groupName;
   const pageRows = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   /** DASH-05: every expense in the current filters (not just this page). */
@@ -145,7 +178,7 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = exportFileName(groupName, range.from, range.to, "csv");
+    link.download = exportFileName(exportScope, range.from, range.to, "csv");
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -155,7 +188,7 @@ export default function ReportsPage() {
   /** DASH-06: the browser's "Save as PDF" names the file after the page title. */
   function exportPdf() {
     const previous = document.title;
-    document.title = exportFileName(groupName, range.from, range.to, "pdf").replace(/\.pdf$/, "");
+    document.title = exportFileName(exportScope, range.from, range.to, "pdf").replace(/\.pdf$/, "");
     const restore = () => {
       document.title = previous;
       window.removeEventListener("afterprint", restore);
@@ -200,7 +233,8 @@ export default function ReportsPage() {
           <h1>Reports</h1>
           <p>Spending by period, category and group.</p>
           <p className="mn-print-only">
-            {groupName} · {longDate(range.from)} – {longDate(range.to)} · Prepared for {user?.name ?? ""}
+            {groupName}
+            {categoryLabel ? ` · ${categoryLabel}` : ""} · {longDate(range.from)} – {longDate(range.to)} · Prepared for {user?.name ?? ""}
           </p>
         </header>
 
@@ -216,6 +250,21 @@ export default function ReportsPage() {
               { value: "all", label: "All groups + personal" },
               { value: "personal", label: "Personal only" },
               ...groups.map((group) => ({ value: group.id, label: group.name })),
+            ]}
+          />
+          <Select
+            variant="chip"
+            align="start"
+            label="Category"
+            value={category}
+            active={category !== "all"}
+            onChange={(value) => {
+              setCategory(value as "all" | CategoryKey);
+              setPage(1);
+            }}
+            options={[
+              { value: "all", label: "All categories" },
+              ...(Object.keys(CATEGORY_META) as CategoryKey[]).map((key) => ({ value: key, label: CATEGORY_META[key].label })),
             ]}
           />
           <Select
@@ -282,17 +331,28 @@ export default function ReportsPage() {
                   const meta = CATEGORY_META[item.key];
                   return (
                     <li key={item.key}>
-                      <span className="mn-reports-bar-label">
-                        <CategoryIcon name={item.key} size={18} />
-                        {meta.label}
-                      </span>
-                      <span className="mn-reports-bar-track" aria-hidden="true">
-                        <span style={{ width: `${Math.max(item.share * 100, 2)}%`, background: meta.color }} />
-                      </span>
-                      <span className="mn-reports-bar-value">
-                        <strong>{peso(item.amount)}</strong>
-                        <small>{Math.round(item.share * 100)}%</small>
-                      </span>
+                      <button
+                        type="button"
+                        className={`mn-reports-bar-row ${category === item.key ? "is-selected" : ""}`}
+                        aria-pressed={category === item.key}
+                        aria-label={`${meta.label}: ${peso(item.amount)}. ${category === item.key ? "Showing only this category. Tap to show all." : "Tap to report on this category only."}`}
+                        onClick={() => {
+                          setCategory(category === item.key ? "all" : item.key);
+                          setPage(1);
+                        }}
+                      >
+                        <span className="mn-reports-bar-label">
+                          <CategoryIcon name={item.key} size={18} />
+                          {meta.label}
+                        </span>
+                        <span className="mn-reports-bar-track" aria-hidden="true">
+                          <span style={{ width: `${Math.max(item.share * 100, 2)}%`, background: meta.color }} />
+                        </span>
+                        <span className="mn-reports-bar-value">
+                          <strong>{peso(item.amount)}</strong>
+                          <small>{Math.round(item.share * 100)}%</small>
+                        </span>
+                      </button>
                     </li>
                   );
                 })}
@@ -322,6 +382,63 @@ export default function ReportsPage() {
             )}
           </section>
         </div>
+
+        {category !== "all" && categoryReport && (
+          <section className="mn-reports-card mn-reports-category" aria-labelledby="category-title">
+            <div className="mn-reports-category-head">
+              <h2 id="category-title">
+                <CategoryIcon name={category} size={20} />
+                {categoryLabel} report
+              </h2>
+              <button type="button" className="mn-reports-clear" onClick={() => setCategory("all")}>
+                Show all categories
+              </button>
+            </div>
+            {categoryReport.groups.length ? (
+              <div className="mn-reports-category-grid">
+                <div>
+                  <h3>By group</h3>
+                  <ul className="mn-reports-split">
+                    {categoryReport.groups.map((item) => (
+                      <li key={item.id}>
+                        <span>
+                          {item.name}
+                          <small>
+                            {item.count} {item.count === 1 ? "expense" : "expenses"}
+                          </small>
+                        </span>
+                        <strong>{peso(item.total)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3>By month</h3>
+                  <ul className="mn-reports-split">
+                    {categoryReport.months.map((item) => (
+                      <li key={item.month}>
+                        <span>
+                          {new Date(`${item.month}-01T00:00:00`).toLocaleDateString("en-PH", { month: "long", year: "numeric" })}
+                          <span className="mn-reports-split-bar" aria-hidden="true">
+                            <span
+                              style={{
+                                width: `${categoryReport.peak ? Math.max((item.total / categoryReport.peak) * 100, 3) : 0}%`,
+                                background: CATEGORY_META[category].color,
+                              }}
+                            />
+                          </span>
+                        </span>
+                        <strong>{peso(item.total)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <p className="mn-reports-empty">No {categoryLabel.toLowerCase()} expenses in this period. Try a longer range.</p>
+            )}
+          </section>
+        )}
 
         <section className="mn-reports-card" aria-labelledby="itemized-title">
           <h2 id="itemized-title">Itemized expenses</h2>
@@ -368,10 +485,11 @@ export default function ReportsPage() {
 }
 
 function ReportTableRow({ row }: { row: ReportRow }) {
+  // data-label feeds the phone layout, where each row becomes a card.
   return (
     <tr>
-      <td>{new Date(row.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</td>
-      <td>
+      <td data-label="Date">{new Date(row.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</td>
+      <td data-label="Expense" className="is-title">
         <Link
           href={
             row.groupId === "personal"
@@ -382,11 +500,11 @@ function ReportTableRow({ row }: { row: ReportRow }) {
           {row.title}
         </Link>
       </td>
-      <td>{row.groupName}</td>
-      <td>{CATEGORY_META[categoryKey(row.category)].label}</td>
-      <td>{row.payerName}</td>
-      <td className="is-num">{money(row.amount, row.currency)}</td>
-      <td className="is-num">{row.yourShare ? money(row.yourShare, row.currency) : "—"}</td>
+      <td data-label="Group">{row.groupName}</td>
+      <td data-label="Category">{CATEGORY_META[categoryKey(row.category)].label}</td>
+      <td data-label="Paid by">{row.payerName}</td>
+      <td data-label="Amount" className="is-num">{money(row.amount, row.currency)}</td>
+      <td data-label="Your share" className="is-num">{row.yourShare ? money(row.yourShare, row.currency) : "—"}</td>
     </tr>
   );
 }

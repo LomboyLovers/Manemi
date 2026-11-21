@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { csvField, expensesToCsv, exportFileName } from "./csv.ts";
+import { csvField, csvTotals, expensesToCsv, exportFileName } from "./csv.ts";
 
 test("fields: plain, quoted, numbers, formulas neutralised", () => {
   assert.equal(csvField("Dinner"), "Dinner");
@@ -23,10 +23,24 @@ test("file: BOM, header, dates and amounts, CRLF", () => {
   );
   assert.ok(csv.startsWith("﻿Date,Expense,Group,Category,Paid by,Amount,Currency,Your share\r\n"));
   const lines = csv.slice(1).trimEnd().split("\r\n");
-  assert.equal(lines.length, 3);
+  assert.equal(lines.length, 5); // header + 2 expenses + a TOTAL per currency
   assert.equal(lines[1], '2026-11-19,"Samgyup, Myeongdong",Korea 2026,Food & Drink,You,4200.00,PHP,840.00');
   assert.equal(lines[2], "2026-11-02,Hotel,Korea 2026,Lodging,Maria,300.00,USD,60.00");
+  assert.equal(lines[3], ",TOTAL (1 expense),,,,4200.00,PHP,840.00");
+  assert.equal(lines[4], ",TOTAL (1 expense),,,,300.00,USD,60.00");
   assert.ok(csv.endsWith("\r\n"));
+});
+
+test("totals: per currency, pesos first, no float drift", () => {
+  const row = (amount: number, yourShare: number, currency = "PHP") => ({
+    date: "2026-11-01T00:00:00Z", title: "x", groupName: "g", category: "food", payerName: "p", amount, currency, yourShare,
+  });
+  assert.deepEqual(csvTotals([row(0.1, 0.1), row(0.2, 0.2), row(5, 1, "USD"), row(1, 1, "KRW")]), [
+    { currency: "PHP", amount: 0.3, yourShare: 0.3, count: 2 },
+    { currency: "KRW", amount: 1, yourShare: 1, count: 1 },
+    { currency: "USD", amount: 5, yourShare: 1, count: 1 },
+  ]);
+  assert.deepEqual(csvTotals([]), []);
 });
 
 test("empty export still has the header", () => {

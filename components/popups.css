@@ -818,3 +818,45 @@
 @media (prefers-reduced-motion: reduce) {
   .mn-quick-action { transition: none; }
 }
+
+/* ---------- sticky header (phones) ----------
+   The avatar, page actions and bell stay reachable while scrolling a long list.
+   The tint is painted by a pseudo-element so the bell's fixed panel is not
+   clipped (no clip-path / backdrop-filter / transform on the header itself). */
+@media (max-width: 767.98px) {
+  .mn-page-header,
+  .md-topbar {
+    --mn-page-pad: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    margin-bottom: 12px;
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    padding-bottom: 8px;
+  }
+  .mn-page-header::before,
+  .md-topbar::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 calc(var(--mn-page-pad) * -1);
+    background: var(--mn-bg, #121214);
+    pointer-events: none;
+  }
+  /* The reports' PDF/CSV buttons keep their size, so the row never wraps. */
+  .mn-header-actions {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+}
+@media print {
+  .mn-page-header,
+  .md-topbar {
+    position: static;
+  }
+}
+@media (max-width: 380px) {
+  .md-topbar {
+    --mn-page-pad: 14px;
+  }
+}
