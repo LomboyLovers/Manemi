@@ -860,3 +860,36 @@
     --mn-page-pad: 14px;
   }
 }
+
+/* The switches live inside .mn-account-list, whose generic "button = full-width
+   menu row" rule (and "button span = flex: 1") was stretching them off the sheet.
+   These selectors are more specific, so the switch keeps its own size. */
+.mn-notif-list .mn-switch {
+  display: block;
+  width: 52px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  flex: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.mn-notif-list .mn-switch + .mn-switch {
+  border-top: 0;
+}
+.mn-notif-list .mn-switch span {
+  flex: none;
+}
+/* 44px tap area around the 52x32 switch */
+.mn-notif-list .mn-switch::after {
+  content: "";
+  position: absolute;
+  inset: -6px -4px;
+}
+.mn-notif-list .mn-switch {
+  background: var(--mn-surface-3, #4a4a55);
+}
+.mn-notif-list .mn-switch.is-on {
+  background: var(--mn-accent, #8b3dff);
+}
