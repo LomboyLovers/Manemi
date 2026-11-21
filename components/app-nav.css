@@ -285,3 +285,28 @@
     display: none;
   }
 }
+
+/* Very small phones (320px): the tab pill shrinks so the + button stays on screen. */
+@media (max-width: 767.98px) {
+  .mn-nav-links {
+    min-width: 0;
+  }
+  .mn-nav-link {
+    min-width: 0;
+    padding-inline: 2px;
+  }
+}
+@media (max-width: 340px) {
+  .mn-nav {
+    left: 10px;
+    right: 10px;
+    gap: 6px;
+  }
+  .mn-nav-link {
+    font-size: 11px;
+  }
+  .mn-nav-add {
+    width: 56px;
+    height: 56px;
+  }
+}

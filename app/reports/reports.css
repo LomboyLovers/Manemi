@@ -552,3 +552,14 @@
     min-height: 32px;
   }
 }
+
+@media (max-width: 767.98px) {
+  .mn-reports-balances li {
+    align-items: center;
+  }
+  .mn-reports-balances a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

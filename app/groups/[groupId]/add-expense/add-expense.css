@@ -500,3 +500,13 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* The check circle stays 31px to look right; its tap area is 44px. */
+.ae-check {
+  position: relative;
+}
+.ae-check::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}

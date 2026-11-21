@@ -49,6 +49,13 @@ const shortDate = (iso: string) =>
 const longDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" });
 
+/** "2026-11" in the viewer's own time zone (a 2 AM expense on Dec 1 is December, not UTC's November). */
+function monthOf(date: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date.slice(0, 7);
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export default function ReportsPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
@@ -127,7 +134,7 @@ export default function ReportsPage() {
       entry.count += 1;
       entry.total += row.amount;
       byGroup.set(row.groupId, entry);
-      const month = row.date.slice(0, 7);
+      const month = monthOf(row.date);
       byMonth.set(month, (byMonth.get(month) ?? 0) + row.amount);
     }
     const months = [...byMonth].sort(([a], [b]) => (a < b ? -1 : 1)).map(([month, total]) => ({ month, total }));
