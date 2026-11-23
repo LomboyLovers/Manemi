@@ -174,7 +174,8 @@
   border: 0;
   outline: 0;
   color: white;
-  font-size: 14px;
+  /* 16px minimum: iOS Safari zooms the page into any text field smaller than that. */
+  font-size: 16px;
 }
 .manemi-rich-group-section > h2 {
   font-size: 13px;
