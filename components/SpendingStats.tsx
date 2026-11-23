@@ -371,7 +371,7 @@ export default function SpendingStats({ userId }: { userId: string }) {
               : source === "personal"
                 ? "Your personal expenses, in pesos."
                 : "Your share of group expenses plus your personal expenses, in pesos."}{" "}
-            <Link href="/personal">Personal expenses</Link>
+            <Link href="/history?type=personal">Personal expenses</Link>
           </p>
         </>
       )}

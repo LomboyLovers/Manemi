@@ -15,7 +15,8 @@ import {
 import { CATEGORY_META, money, peso } from "@/lib/manemi/format";
 import DatePicker from "@/components/DatePicker";
 import { ACTIVITY_META, type ActivityItem } from "@/lib/manemi/activity";
-import { HISTORY_EVERYTHING, HISTORY_PERSONAL, PAGE_SIZE, searchActivity, searchHistory } from "@/lib/manemi/search";
+import { HISTORY_EVERYTHING, HISTORY_PERSONAL, PAGE_SIZE, reportExpenses, searchActivity, searchHistory } from "@/lib/manemi/search";
+import { personalInRange } from "@/lib/manemi/personal";
 import { useDebounced } from "@/lib/manemi/useDebounced";
 import Pagination from "@/components/Pagination";
 import CategoryIcon, { type GlyphName } from "@/components/CategoryIcon";
@@ -123,7 +124,10 @@ export default function HistoryPage() {
   const debouncedSearch = useDebounced(search, 300);
   const [kind, setKind] = useState<Kind>("all");
   // Type (groups / personal / both) is separate from which group.
-  const [scope, setScope] = useState<"groups" | "personal" | "all">("groups");
+  const [scope, setScope] = useState<"groups" | "personal" | "all">("all");
+  const [notice, setNotice] = useState("");
+  // This month's spending (your share, pesos): groups and personal.
+  const [month, setMonth] = useState<{ groups: number; personal: number } | null>(null);
   const [groupId, setGroupId] = useState("all");
   const groupFilter = scope === "personal" ? HISTORY_PERSONAL : scope === "all" ? HISTORY_EVERYTHING : groupId;
   const [sort, setSort] = useState<Sort>("newest");
@@ -196,6 +200,41 @@ export default function HistoryPage() {
 
   const isLog = kind === "activity";
 
+  // Coming from the old Personal page or the form: "?type=personal", "?saved", "?deleted".
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("type") === "personal") setScope("personal");
+    if (params.has("saved")) setNotice("Expense saved.");
+    else if (params.has("deleted")) setNotice("Expense deleted.");
+    if (params.size) window.history.replaceState(null, "", "/history");
+  }, []);
+
+  // Month totals for the summary card (loaded once per data change).
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    const now = new Date();
+    const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const supabase = createClient();
+    Promise.all([
+      reportExpenses(supabase, userId, { groupId: "all", from }),
+      personalInRange(supabase, from).catch(() => []),
+    ])
+      .then(([fromGroups, personal]) => {
+        if (!alive) return;
+        const sum = (list: Array<{ currency: string; yourShare: number }>) =>
+          list.reduce((total, row) => (row.currency === "PHP" ? total + Math.round(row.yourShare * 100) : total), 0) / 100;
+        setMonth({
+          groups: sum(fromGroups),
+          personal: sum(personal.map((item) => ({ currency: item.currency, yourShare: item.amount }))),
+        });
+      })
+      .catch(() => alive && setMonth(null));
+    return () => {
+      alive = false;
+    };
+  }, [userId, dataVersion]);
+
   // One database query per page / filter change (search is debounced).
   useEffect(() => {
     if (!userId) return;
@@ -214,7 +253,7 @@ export default function HistoryPage() {
         else setItems(result.items as HistoryExpense[]);
         setTotal(result.total);
         const unfiltered =
-          !debouncedSearch.trim() && groupFilter === "all" && !onlyMine && kind === "all" &&
+          !debouncedSearch.trim() && scope === "all" && !onlyMine && kind === "all" &&
           category === "all" && memberId === "all" && !dateFrom && !dateTo;
         if (unfiltered) setEverything(result.total);
         // Deleted rows can leave us past the last page.
@@ -273,12 +312,12 @@ export default function HistoryPage() {
   );
 
   const filtersActive =
-    Boolean(search.trim()) || kind !== "all" || groupFilter !== "all" || onlyMine || sort !== "newest" ||
+    Boolean(search.trim()) || kind !== "all" || scope !== "all" || onlyMine || sort !== "newest" ||
     category !== "all" || memberId !== "all" || Boolean(dateFrom || dateTo);
   const clearFilters = () => {
     setSearch("");
     setKind("all");
-    setScope("groups");
+    setScope("all");
     setGroupId("all");
     setOnlyMine(false);
     setSort("newest");
@@ -291,7 +330,7 @@ export default function HistoryPage() {
 
   const groupOptions = groups;
   const noFilters =
-    !debouncedSearch.trim() && groupFilter === "all" && !onlyMine && category === "all" &&
+    !debouncedSearch.trim() && scope === "all" && !onlyMine && category === "all" &&
     memberId === "all" && !dateFrom && !dateTo;
 
   return (
@@ -383,9 +422,34 @@ export default function HistoryPage() {
           <p>
             {isLog
               ? "Audit log: who added, edited, deleted or paid what, in every group."
-              : "Every expense and payment across your groups."}
+              : "Every expense and payment, in your groups and your own."}
           </p>
         </div>
+
+        {notice && (
+          <p className="mn-history-notice" role="status">
+            {notice}
+          </p>
+        )}
+
+        {!isLog && month && (
+          <section className="mn-history-summary" aria-label="Spent this month">
+            <div>
+              <span>Spent in {new Date().toLocaleDateString("en-PH", { month: "long" })}</span>
+              <strong>{peso(month.groups + month.personal)}</strong>
+            </div>
+            <dl>
+              <div>
+                <dt>Groups</dt>
+                <dd>{peso(month.groups)}</dd>
+              </div>
+              <div>
+                <dt>Personal</dt>
+                <dd>{peso(month.personal)}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
 
         <div className="mn-history-search">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -434,12 +498,12 @@ export default function HistoryPage() {
             label="Type"
             prefix="Type"
             value={scope}
-            active={scope !== "groups"}
+            active={scope !== "all"}
             onChange={(value) => setScope(value as "groups" | "personal" | "all")}
             options={[
+              { value: "all", label: "Groups + personal" },
               { value: "groups", label: "Groups" },
               { value: "personal", label: "Personal" },
-              { value: "all", label: "Groups + personal" },
             ]}
           />
           {scope === "groups" && (
@@ -618,7 +682,7 @@ export default function HistoryPage() {
               </svg>
             </div>
             <h2 id="history-empty-title">No history yet</h2>
-            <p>Expenses and payments from all your groups will show up here.</p>
+            <p>Expenses and payments from your groups, plus your personal expenses, will show up here.</p>
             <button type="button" className="mn-button-primary" onClick={() => setShowAdd(true)}>
               <span aria-hidden="true">+</span> Add Expense
             </button>
@@ -626,12 +690,12 @@ export default function HistoryPage() {
         ) : items.length === 0 ? (
           <section className="mn-history-empty is-filtered" aria-labelledby="history-filtered-title">
             <h2 id="history-filtered-title">
-              {kind === "payments" && !search.trim() && groupFilter === "all" && !onlyMine
+              {kind === "payments" && !search.trim() && scope === "all" && !onlyMine
                 ? "No payments yet"
                 : "No activity matches your filters"}
             </h2>
             <p>
-              {kind === "payments" && !search.trim() && groupFilter === "all" && !onlyMine
+              {kind === "payments" && !search.trim() && scope === "all" && !onlyMine
                 ? "Payments you record when settling up will appear here."
                 : "Try a broader search, or reset the filters to see everything."}
             </p>

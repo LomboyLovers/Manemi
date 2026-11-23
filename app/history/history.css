@@ -654,3 +654,57 @@
 .mn-history-popover {
   width: 300px;
 }
+
+/* This month's spending: groups + personal */
+.mn-history-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid rgba(139, 61, 255, 0.52);
+  border-radius: 22px;
+  background: radial-gradient(ellipse at 90% 0%, rgba(139, 61, 255, 0.28), transparent 68%), #1c1c21;
+}
+.mn-history-summary > div {
+  display: grid;
+  gap: 4px;
+}
+.mn-history-summary > div > span {
+  color: #b9b6c0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.mn-history-summary > div > strong {
+  font-size: clamp(28px, 7vw, 36px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mn-history-summary dl {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+.mn-history-summary dt {
+  color: var(--mn-muted, #a8a8b3);
+  font-size: 13px;
+}
+.mn-history-summary dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mn-history-notice {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(61, 220, 132, 0.12);
+  color: #3ddc84;
+  font-size: 14px;
+  font-weight: 600;
+}

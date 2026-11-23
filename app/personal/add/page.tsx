@@ -118,7 +118,7 @@ export default function AddPersonalExpensePage() {
   const cents = toCents(amount);
   const hasReceipt = Boolean(receiptFile) || (keepReceipt && Boolean(existing?.receiptUrl));
   const formValid = cents > 0 && title.trim().length > 0 && note.length <= PERSONAL_NOTE_MAX;
-  const back = () => router.push("/personal");
+  const back = () => router.push("/history?type=personal");
 
   async function save() {
     if (!title.trim()) setTitleError("Enter what it was for.");
@@ -138,7 +138,7 @@ export default function AddPersonalExpensePage() {
       // Replaced or removed receipt: delete the old file.
       if (existing?.receiptUrl && existing.receiptUrl !== receiptUrl) await removePersonalReceipt(supabase, existing.receiptUrl);
       notifyDataChanged();
-      router.push(`/personal?saved=${encodeURIComponent(id)}`);
+      router.push(`/history?type=personal&saved=${encodeURIComponent(id)}`);
     } catch (reason) {
       setSaveError(reason instanceof Error ? reason.message : "Couldn't save the expense. Try again.");
       setSaving(false);
@@ -156,7 +156,7 @@ export default function AddPersonalExpensePage() {
       throw reason;
     }
     notifyDataChanged();
-    router.push("/personal?deleted=1");
+    router.push("/history?type=personal&deleted=1");
   }
 
   return (
