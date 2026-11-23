@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { invalidateGroupsData } from "@/lib/manemi/groups";
@@ -56,7 +57,9 @@ export default function AccountSheet({ name: initialName, email, handle, avatarU
 
   const subtitle = [handle ? `@${handle}` : "", email].filter(Boolean).join(" · ");
 
-  return (
+  // Portal to <body>: the sticky page header is its own stacking context, which
+  // would otherwise trap this sheet underneath the bottom nav.
+  return createPortal(
     <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={onClose}>
       <section
         ref={ref}
@@ -162,6 +165,7 @@ export default function AccountSheet({ name: initialName, email, handle, avatarU
         </>
         )}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
