@@ -21,6 +21,7 @@ import { useDebounced } from "@/lib/manemi/useDebounced";
 import Pagination from "@/components/Pagination";
 import CategoryIcon, { type GlyphName } from "@/components/CategoryIcon";
 import Select from "@/components/Select";
+import PersonalDetailsDialog from "@/components/PersonalDetailsDialog";
 
 const ACTION_GLYPH: Record<ActivityItem["action"], GlyphName> = {
   expense_created: "added",
@@ -126,6 +127,7 @@ export default function HistoryPage() {
   // Type (groups / personal / both) is separate from which group.
   const [scope, setScope] = useState<"groups" | "personal" | "all">("all");
   const [notice, setNotice] = useState("");
+  const [openPersonal, setOpenPersonal] = useState<string | null>(null);
   // This month's spending (your share, pesos): groups and personal.
   const [month, setMonth] = useState<{ groups: number; personal: number } | null>(null);
   const [groupId, setGroupId] = useState("all");
@@ -427,6 +429,8 @@ export default function HistoryPage() {
               : "Every expense and payment, in your groups and your own."}
           </p>
         </div>
+
+        {openPersonal && <PersonalDetailsDialog id={openPersonal} onClose={() => setOpenPersonal(null)} />}
 
         {notice && (
           <p className="mn-history-notice" role="status">
@@ -738,6 +742,15 @@ export default function HistoryPage() {
                               : `/groups/${item.groupId}?expense=${encodeURIComponent(item.id)}`
                         }
                         className="mn-history-row"
+                        onClick={
+                          isPersonal
+                            ? (event) => {
+                                // Personal expenses open a details popup first; Edit is inside it.
+                                event.preventDefault();
+                                setOpenPersonal(item.id);
+                              }
+                            : undefined
+                        }
                       >
                         <span className="mn-history-icon" aria-hidden="true">
                           {isPayment ? (
