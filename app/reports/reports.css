@@ -563,3 +563,13 @@
     min-height: 44px;
   }
 }
+
+/* Touch screens of any width (tablets too): links in the report need a finger-sized hit area. */
+@media screen and (pointer: coarse) {
+  .mn-reports-balances a,
+  .mn-reports-table td a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

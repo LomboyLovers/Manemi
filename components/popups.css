@@ -839,14 +839,26 @@
     content: "";
     position: absolute;
     z-index: -1;
-    inset: 0 calc(var(--mn-page-pad) * -1);
+    top: 0;
+    bottom: 0;
+    /* Exactly one screen wide, centered on the header: pages pad their sides by
+       different amounts (14-64px), so a fixed bleed either overflowed or left gaps. */
+    left: 50%;
+    width: 100vw;
+    transform: translateX(-50%);
     background: var(--mn-bg, #121214);
     pointer-events: none;
   }
-  /* The reports' PDF/CSV buttons keep their size, so the row never wraps. */
+    /* The reports' PDF/CSV buttons keep their size, so the row never wraps. */
   .mn-header-actions {
     flex-wrap: nowrap;
     min-width: 0;
+  }
+}
+/* Desktop browsers narrower than 768px have a scrollbar, so 100vw is slightly wider than the page. */
+@media (max-width: 767.98px) and (pointer: fine) {
+  html {
+    overflow-x: clip;
   }
 }
 @media print {

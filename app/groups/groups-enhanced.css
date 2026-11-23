@@ -378,3 +378,11 @@
   place-items: center;
   color: var(--mn-accent-light, #c4a1ff);
 }
+
+/* Phones: the page already pads 20px, so the content's own 22px made 42px margins
+   (cards only ~290px wide at 375px). Match the other pages instead. */
+@media (max-width: 767.98px) {
+  .manemi-groups-page .groups-page-content {
+    padding-inline: 0;
+  }
+}
