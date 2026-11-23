@@ -28,6 +28,13 @@ const MONTH_MARKS = [0, 7, 14, 21, 28];
 const compact = new Intl.NumberFormat("en-PH", { notation: "compact", maximumFractionDigits: 1 });
 const axisPeso = (cents: number) => (cents === 0 ? "₱0" : `₱${compact.format(cents / 100)}`);
 
+type Source = "combined" | "groups" | "personal";
+const SOURCES: Array<{ value: Source; label: string }> = [
+  { value: "combined", label: "Combined" },
+  { value: "groups", label: "Groups" },
+  { value: "personal", label: "Personal" },
+];
+
 /**
  * Home: what you've spent this week / month, day by day, with last week /
  * month as a gray line behind it (toggle). Styled as a smooth area chart.
@@ -35,7 +42,9 @@ const axisPeso = (cents: number) => (cents === 0 ? "₱0" : `₱${compact.format
 export default function SpendingStats({ userId }: { userId: string }) {
   const [period, setPeriod] = useState<SpendingPeriod>("week");
   const [compare, setCompare] = useState(true);
-  const [rows, setRows] = useState<ReportRow[] | null>(null);
+  const [source, setSource] = useState<Source>("combined");
+  const [groupRows, setGroupRows] = useState<ReportRow[] | null>(null);
+  const [personalRows, setPersonalRows] = useState<ReportRow[]>([]);
   const [error, setError] = useState("");
   const [active, setActive] = useState<number | null>(null);
   const [width, setWidth] = useState(0);
@@ -53,7 +62,11 @@ export default function SpendingStats({ userId }: { userId: string }) {
       // Personal expenses count in full; if they aren't available, the card still works.
       personalInRange(supabase, from).catch(() => []),
     ])
-      .then(([groupRows, personal]) => alive && setRows([...groupRows, ...personalAsReportRows(personal)]))
+      .then(([fromGroups, personal]) => {
+        if (!alive) return;
+        setPersonalRows(personalAsReportRows(personal));
+        setGroupRows(fromGroups);
+      })
       .catch((reason: unknown) => alive && setError(reason instanceof Error ? reason.message : "Couldn't load your spending."));
     return () => {
       alive = false;
@@ -69,7 +82,20 @@ export default function SpendingStats({ userId }: { userId: string }) {
     return () => observer.disconnect();
   }, []);
 
+  // Loaded once; the toggle only changes which of the two lists is drawn.
+  const rows = useMemo(
+    () =>
+      groupRows === null
+        ? null
+        : source === "groups"
+          ? groupRows
+          : source === "personal"
+            ? personalRows
+            : [...groupRows, ...personalRows],
+    [groupRows, personalRows, source],
+  );
   const data = useMemo(() => dailyComparison(rows ?? [], period, new Date()), [rows, period]);
+  const sourceName = source === "groups" ? "group" : source === "personal" ? "personal" : "";
   const { slots, today } = data;
   const unit = period === "week" ? "week" : "month";
   const hasAny = data.currentTotal > 0 || data.previousTotal > 0;
@@ -135,6 +161,23 @@ export default function SpendingStats({ userId }: { userId: string }) {
         </div>
       </div>
 
+      <div className="mn-spend-toggle mn-spend-source" role="group" aria-label="Spending to include">
+        {SOURCES.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            aria-pressed={source === item.value}
+            className={source === item.value ? "active" : ""}
+            onClick={() => {
+              setSource(item.value);
+              setActive(null);
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       {error ? (
         <p className="mn-spend-error" role="alert">
           {error}
@@ -186,7 +229,7 @@ export default function SpendingStats({ userId }: { userId: string }) {
             className="mn-spend-chart"
             tabIndex={hasAny ? 0 : -1}
             role="img"
-            aria-label={`Your spending each day this ${unit}${compare ? ` and last ${unit}` : ""}. Use the arrow keys to read each day.`}
+            aria-label={`Your ${sourceName} spending each day this ${unit}${compare ? ` and last ${unit}` : ""}. Use the arrow keys to read each day.`}
             onPointerMove={(event) => slotFromPointer(event.clientX)}
             onPointerDown={(event) => slotFromPointer(event.clientX)}
             onPointerLeave={() => setActive(null)}
@@ -290,7 +333,11 @@ export default function SpendingStats({ userId }: { userId: string }) {
             )}
             {rows !== null && !hasAny && (
               <p className="mn-spend-empty">
-                No spending this {unit} or last {unit} yet. Your share of new expenses will show here.
+                {source === "personal"
+                  ? `No personal expenses this ${unit} or last ${unit} yet.`
+                  : source === "groups"
+                    ? `No group spending this ${unit} or last ${unit} yet. Your share of new expenses will show here.`
+                    : `No spending this ${unit} or last ${unit} yet. Your share of new expenses will show here.`}
               </p>
             )}
           </div>
@@ -299,7 +346,7 @@ export default function SpendingStats({ userId }: { userId: string }) {
               width: 1px, so the hiding goes on a wrapper. */}
           <div className="mn-visually-hidden">
           <table>
-            <caption>Your spending each day, this {unit} and last {unit}</caption>
+            <caption>Your {sourceName} spending each day, this {unit} and last {unit}</caption>
             <thead>
               <tr>
                 <th scope="col">Day</th>
@@ -319,7 +366,11 @@ export default function SpendingStats({ userId }: { userId: string }) {
           </table>
           </div>
           <p className="mn-spend-note">
-            Your share of group expenses plus your personal expenses, in pesos.{" "}
+            {source === "groups"
+              ? "Your share of group expenses, in pesos."
+              : source === "personal"
+                ? "Your personal expenses, in pesos."
+                : "Your share of group expenses plus your personal expenses, in pesos."}{" "}
             <Link href="/personal">Personal expenses</Link>
           </p>
         </>

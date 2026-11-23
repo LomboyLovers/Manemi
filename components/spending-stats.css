@@ -41,6 +41,13 @@
   font-weight: 600;
   cursor: pointer;
 }
+.mn-spend-source {
+  display: flex;
+  margin-bottom: 14px;
+}
+.mn-spend-source button {
+  flex: 1;
+}
 .mn-spend-toggle button.active {
   background: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
   color: #fff;
