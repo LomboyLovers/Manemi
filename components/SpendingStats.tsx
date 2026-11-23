@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
 import { reportExpenses, type ReportRow } from "@/lib/manemi/search";
 import { personalAsReportRows, personalInRange } from "@/lib/manemi/personal";
 import { peso } from "@/lib/manemi/format";
@@ -365,14 +364,6 @@ export default function SpendingStats({ userId }: { userId: string }) {
             </tbody>
           </table>
           </div>
-          <p className="mn-spend-note">
-            {source === "groups"
-              ? "Your share of group expenses, in pesos."
-              : source === "personal"
-                ? "Your personal expenses, in pesos."
-                : "Your share of group expenses plus your personal expenses, in pesos."}{" "}
-            <Link href="/history?type=personal">Personal expenses</Link>
-          </p>
         </>
       )}
     </section>
