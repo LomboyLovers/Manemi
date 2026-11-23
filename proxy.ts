@@ -40,6 +40,22 @@ export async function proxy(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 
+  // Already signed in? Skip the login and register pages. This is what lets the
+  // home-screen icon (or a bookmark of "/") open straight into the app.
+  const isGuestOnlyPage = pathname === "/" || pathname === "/registration";
+  if (isGuestOnlyPage && user && !error) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    url.search = "";
+
+    const redirectResponse = NextResponse.redirect(url);
+    // Preserve refreshed Supabase session cookies.
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    return redirectResponse;
+  }
+
   if (isProtectedRoute && (error || !user)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

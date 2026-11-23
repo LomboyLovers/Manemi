@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -13,6 +13,12 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Manemi",
   description: "Split group expenses and settle up with friends.",
+  // iOS home-screen app: full screen, no Safari bars.
+  appleWebApp: { capable: true, title: "Manemi", statusBarStyle: "black" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#121214",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
