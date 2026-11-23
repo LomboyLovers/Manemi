@@ -310,3 +310,56 @@
     height: 56px;
   }
 }
+
+/* ---------- phone: sliding highlight ---------- */
+.mn-nav-slot {
+  display: none;
+}
+@media (max-width: 767.98px) {
+  .mn-nav-links {
+    position: relative;
+  }
+  .mn-nav-link {
+    position: relative;
+    z-index: 1;
+  }
+  .mn-nav-slot {
+    display: block;
+    position: absolute;
+    z-index: 0;
+    top: 5px;
+    bottom: 5px;
+    left: 0;
+    border-radius: 999px;
+    background: var(--mn-accent, #8b3dff);
+    pointer-events: none;
+  }
+  /* The moving highlight replaces the active tab's own background. */
+  .mn-nav-links.has-slot .mn-nav-link.is-active {
+    background: transparent;
+  }
+}
+@media (max-width: 767.98px) and (prefers-reduced-motion: no-preference) {
+  .mn-nav-slot.is-animated {
+    transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1), width 360ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .mn-nav-link {
+    transition: color 200ms ease;
+  }
+}
+
+/* ---------- page content eases in instead of popping ---------- */
+@keyframes mn-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Only each page's content wrapper: the nav is position: fixed and popups
+     keep their own animation. "backwards" = nothing is left applied afterwards,
+     so no transform lingers to trap fixed children. */
+  main.mn-app-page > :is(.dashboard-container, .groups-page-content, .mn-friends-content, .mn-history-content, .mn-reports-content) {
+    animation: mn-page-in 260ms cubic-bezier(0.2, 0, 0, 1) backwards;
+  }
+}

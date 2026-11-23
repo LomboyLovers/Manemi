@@ -711,6 +711,8 @@
 
 /* Type: first, on its own row above the other filters */
 .mn-history-type {
+  display: flex;
+  justify-content: flex-end;
   margin: 16px 0 0;
 }
 .mn-history-type + .mn-history-filters {

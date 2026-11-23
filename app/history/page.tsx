@@ -478,7 +478,7 @@ export default function HistoryPage() {
         <div className="mn-history-type">
     <Select
       variant="chip"
-      align="start"
+      align="end"
       label="Type"
       prefix="Type"
       value={scope}

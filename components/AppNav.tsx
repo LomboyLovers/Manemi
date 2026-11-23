@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useLiveUpdates } from "@/lib/manemi/realtime";
@@ -58,6 +58,60 @@ export default function AppNav({ active, groups }: Props) {
 
   const dataVersion = useDataVersion();
 
+  // Phone tab bar: the purple highlight slides from the tab you came from to the
+  // one you opened. Each page mounts its own nav, so the last tab is kept in
+  // sessionStorage and the highlight starts there, then moves.
+  const linksRef = useRef<HTMLDivElement>(null);
+  const [slot, setSlot] = useState<{ x: number; w: number; animate: boolean } | null>(null);
+  useLayoutEffect(() => {
+    const box = linksRef.current;
+    if (!box || !active) {
+      setSlot(null);
+      return;
+    }
+    const measure = (id: string) => {
+      const el = box.querySelector<HTMLElement>(`[data-nav-id="${id}"]`);
+      return el && el.offsetWidth ? { x: el.offsetLeft, w: el.offsetWidth } : null;
+    };
+    const current = measure(active);
+    if (!current) {
+      setSlot(null);
+      return;
+    }
+    let previous: string | null = null;
+    try {
+      previous = sessionStorage.getItem("mn-nav-prev");
+      sessionStorage.setItem("mn-nav-prev", active);
+    } catch {
+      // Storage can be blocked: the highlight just appears in place.
+    }
+    const from = previous && previous !== active ? measure(previous) : null;
+    let frame = 0;
+    if (from) {
+      setSlot({ ...from, animate: false });
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => setSlot({ ...current, animate: true }));
+      });
+    } else {
+      setSlot({ ...current, animate: false });
+    }
+    // Keep it under the tab when the window is resized or rotated.
+    let first = true;
+    const observer = new ResizeObserver(() => {
+      if (first) {
+        first = false;
+        return;
+      }
+      const now = measure(active);
+      if (now) setSlot({ ...now, animate: false });
+    });
+    observer.observe(box);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [active]);
+
   // Reloads after a profile edit (notifyDataChanged), so the photo updates here too.
   useEffect(() => {
     let active = true;
@@ -77,10 +131,18 @@ export default function AppNav({ active, groups }: Props) {
           <span>Manemi</span>
         </Link>
 
-        <div className="mn-nav-links">
+        <div className={`mn-nav-links ${slot ? "has-slot" : ""}`} ref={linksRef}>
+          {slot && (
+            <span
+              className={`mn-nav-slot ${slot.animate ? "is-animated" : ""}`}
+              style={{ transform: `translateX(${slot.x}px)`, width: slot.w }}
+              aria-hidden="true"
+            />
+          )}
           {ITEMS.map((item) => (
             <Link
               key={item.id}
+              data-nav-id={item.id}
               href={item.href}
               className={`mn-nav-link ${active === item.id ? "is-active" : ""} ${item.desktopOnly ? "mn-nav-desktop-only" : ""}`}
               aria-current={active === item.id ? "page" : undefined}
