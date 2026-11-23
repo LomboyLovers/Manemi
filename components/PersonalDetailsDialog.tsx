@@ -8,6 +8,7 @@ import { getPersonal, type PersonalExpense } from "@/lib/manemi/personal";
 import { receiptLink } from "@/lib/manemi/functions";
 import { CATEGORY_META, categoryKey, money } from "@/lib/manemi/format";
 import { useModalFocus } from "./useModalFocus";
+import "./popups.css";
 import "./personal-details.css";
 
 /** Read-only details of one personal expense; Edit opens the form. */
