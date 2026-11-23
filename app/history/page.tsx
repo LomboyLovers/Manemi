@@ -122,13 +122,15 @@ export default function HistoryPage() {
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
-  const [kind, setKind] = useState<Kind>("all");
+  const [kindPick, setKind] = useState<Kind>("all");
   // Type (groups / personal / both) is separate from which group.
   const [scope, setScope] = useState<"groups" | "personal" | "all">("all");
   const [notice, setNotice] = useState("");
   // This month's spending (your share, pesos): groups and personal.
   const [month, setMonth] = useState<{ groups: number; personal: number } | null>(null);
   const [groupId, setGroupId] = useState("all");
+  // Personal expenses have no payments, audit log or members: it is always the expense list.
+  const kind: Kind = scope === "personal" ? "expenses" : kindPick;
   const groupFilter = scope === "personal" ? HISTORY_PERSONAL : scope === "all" ? HISTORY_EVERYTHING : groupId;
   const [sort, setSort] = useState<Sort>("newest");
   const [onlyMine, setOnlyMine] = useState(false);
@@ -242,7 +244,7 @@ export default function HistoryPage() {
     setListLoading(true);
     setListError("");
     const supabase = createClient();
-    const filters = { groupId: groupFilter, query: debouncedSearch, onlyMine, sort, category, memberId, from: dateFrom, to: dateTo };
+    const filters = { groupId: groupFilter, query: debouncedSearch, onlyMine, sort, category, memberId: scope === "personal" ? "all" : memberId, from: dateFrom, to: dateTo };
     const request = isLog
       ? searchActivity(supabase, userId, filters, page)
       : searchHistory(supabase, userId, { ...filters, kind: kind as "all" | "expenses" | "payments" }, page);
@@ -473,8 +475,25 @@ export default function HistoryPage() {
           )}
         </div>
 
+        <div className="mn-history-type">
+    <Select
+      variant="chip"
+      align="start"
+      label="Type"
+      prefix="Type"
+      value={scope}
+      active={scope !== "all"}
+      onChange={(value) => setScope(value as "groups" | "personal" | "all")}
+      options={[
+        { value: "all", label: "Groups + personal" },
+        { value: "groups", label: "Groups" },
+        { value: "personal", label: "Personal" },
+      ]}
+    />
+        </div>
+
         <div className="mn-history-filters" role="toolbar" aria-label="Filter history">
-          {(
+          {scope !== "personal" && (
             [
               ["all", "All"],
               ["expenses", "Expenses"],
@@ -492,20 +511,6 @@ export default function HistoryPage() {
               {label}
             </button>
           ))}
-          <Select
-            variant="chip"
-            align="start"
-            label="Type"
-            prefix="Type"
-            value={scope}
-            active={scope !== "all"}
-            onChange={(value) => setScope(value as "groups" | "personal" | "all")}
-            options={[
-              { value: "all", label: "Groups + personal" },
-              { value: "groups", label: "Groups" },
-              { value: "personal", label: "Personal" },
-            ]}
-          />
           {scope === "groups" && (
             <Select
               variant="chip"
@@ -534,7 +539,7 @@ export default function HistoryPage() {
               ]}
             />
           )}
-          {!isLog && people.length > 1 && (
+          {!isLog && scope !== "personal" && people.length > 1 && (
             <Select
               variant="chip"
               align="start"
