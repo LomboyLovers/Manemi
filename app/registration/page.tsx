@@ -120,12 +120,12 @@ export default function Register() {
         <div className="register-card">
           <h1>Register</h1>
 
-          <form onSubmit={handleRegister}>
+          <form suppressHydrationWarning onSubmit={handleRegister}>
             {/* FULL NAME */}
             <div className="form-group">
               <label htmlFor="fullname">Full Name</label>
 
-              <input
+              <input suppressHydrationWarning
                 id="fullname"
                 type="text"
                 name="fullname"
@@ -137,7 +137,7 @@ export default function Register() {
             <div className="form-group">
               <label htmlFor="username">Username</label>
 
-              <input
+              <input suppressHydrationWarning
                 id="username"
                 type="text"
                 name="username"
@@ -149,7 +149,7 @@ export default function Register() {
             <div className="form-group">
               <label htmlFor="email">Email</label>
 
-              <input
+              <input suppressHydrationWarning
                 id="email"
                 type="email"
                 name="email"
@@ -161,7 +161,7 @@ export default function Register() {
             <div className="form-group">
               <label htmlFor="password">Password</label>
 
-              <input
+              <input suppressHydrationWarning
                 id="password"
                 type="password"
                 name="password"
@@ -173,7 +173,7 @@ export default function Register() {
             <div className="form-group">
               <label htmlFor="confirmPassword">Confirm Password</label>
 
-              <input
+              <input suppressHydrationWarning
                 id="confirmPassword"
                 type="password"
                 name="confirmPassword"

@@ -63,11 +63,11 @@ export default function Home() {
         <div className="login-card">
           <h1>Login</h1>
 
-          <form onSubmit={handleLogin}>
+          <form suppressHydrationWarning onSubmit={handleLogin}>
             <div className="form-group">
               <label htmlFor="email">Email</label>
 
-              <input
+              <input suppressHydrationWarning
                 id="email"
                 type="email"
                 name="email"
@@ -82,7 +82,7 @@ export default function Home() {
             <div className="form-group">
               <label htmlFor="password">Password</label>
 
-              <input
+              <input suppressHydrationWarning
                 id="password"
                 type="password"
                 name="password"

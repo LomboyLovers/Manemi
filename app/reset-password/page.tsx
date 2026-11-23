@@ -68,10 +68,10 @@ export default function ResetPasswordPage() {
               </Link>
             </div>
           ) : (
-            <form onSubmit={submit} noValidate>
+            <form suppressHydrationWarning onSubmit={submit} noValidate>
               <div className="form-group">
                 <label htmlFor="new-password">New password</label>
-                <input
+                <input suppressHydrationWarning
                   id="new-password"
                   type="password"
                   autoComplete="new-password"
@@ -85,7 +85,7 @@ export default function ResetPasswordPage() {
               </div>
               <div className="form-group">
                 <label htmlFor="confirm-password">Confirm new password</label>
-                <input
+                <input suppressHydrationWarning
                   id="confirm-password"
                   type="password"
                   autoComplete="new-password"

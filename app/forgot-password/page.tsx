@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
               </Link>
             </div>
           ) : (
-            <form onSubmit={submit} noValidate>
+            <form suppressHydrationWarning onSubmit={submit} noValidate>
               {expired && (
                 <p className="login-error" role="alert">
                   That reset link has expired or was already used. Request a new one below.
@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
               )}
               <div className="form-group">
                 <label htmlFor="reset-email">Email</label>
-                <input
+                <input suppressHydrationWarning
                   id="reset-email"
                   type="email"
                   placeholder="Enter your email"
