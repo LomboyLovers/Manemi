@@ -22,8 +22,19 @@ export default function Home() {
     try {
       const supabase = createClient();
 
+      // The box accepts an email or a username. A username is looked up to its
+      // email first, because Supabase signs in with email only.
+      const identifier = email.trim();
+      let loginEmail = identifier;
+      if (!identifier.includes("@")) {
+        const { data: found } = await supabase.rpc("login_email_for", { identifier });
+        // Unknown username: send a value that can never match, so the message
+        // is the same "Invalid login credentials" as a wrong password.
+        loginEmail = typeof found === "string" && found ? found : "unknown@invalid.local";
+      }
+
       const { error: loginError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: loginEmail,
         password,
       });
 
@@ -65,16 +76,19 @@ export default function Home() {
 
           <form suppressHydrationWarning onSubmit={handleLogin}>
             <div className="form-group">
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">Email or username</label>
 
               <input suppressHydrationWarning
                 id="email"
-                type="email"
+                type="text"
                 name="email"
-                placeholder="Enter your email"
+                placeholder="Enter your email or username"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
               />
             </div>
