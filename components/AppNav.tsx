@@ -85,6 +85,10 @@ export default function AppNav({ active, groups }: Props) {
     } catch {
       // Storage can be blocked: the highlight just appears in place.
     }
+    // Which way we moved along the tab bar: the page slides in from that side.
+    const order = ITEMS.map((item) => item.id as string);
+    const moved = previous && previous !== active ? order.indexOf(active) - order.indexOf(previous) : 0;
+    document.documentElement.dataset.navDir = moved > 0 ? "right" : moved < 0 ? "left" : "none";
     const from = previous && previous !== active ? measure(previous) : null;
     let frame = 0;
     if (from) {

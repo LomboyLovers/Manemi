@@ -363,3 +363,33 @@
     animation: mn-page-in 260ms cubic-bezier(0.2, 0, 0, 1) backwards;
   }
 }
+
+/* Moving along the tab bar: the page slides in from the side you're heading to. */
+@keyframes mn-page-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+@keyframes mn-page-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+}
+@media (max-width: 767.98px) and (prefers-reduced-motion: no-preference) {
+  html[data-nav-dir="right"] main.mn-app-page > :is(.dashboard-container, .groups-page-content, .mn-friends-content, .mn-history-content, .mn-reports-content) {
+    animation-name: mn-page-in-right;
+    animation-duration: 340ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  html[data-nav-dir="left"] main.mn-app-page > :is(.dashboard-container, .groups-page-content, .mn-friends-content, .mn-history-content, .mn-reports-content) {
+    animation-name: mn-page-in-left;
+    animation-duration: 340ms;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  /* The sideways slide must not add a horizontal scrollbar while it runs. */
+  main.mn-app-page {
+    overflow-x: clip;
+  }
+}
