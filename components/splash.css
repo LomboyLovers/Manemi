@@ -1,0 +1,153 @@
+.mn-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  background: #121214;
+  color: #f5f5f7;
+  font-family: var(--font-inter, Inter), Inter, Arial, Helvetica, sans-serif;
+  text-align: center;
+  transition: opacity 450ms ease, visibility 0s linear 450ms;
+  /* If scripts never start, don't trap the user behind it. */
+  animation: mn-splash-failsafe 1ms linear 8s forwards;
+}
+html[data-splash="seen"] .mn-splash {
+  display: none;
+}
+.mn-splash.is-leaving {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+@keyframes mn-splash-failsafe {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.mn-splash-center {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  padding: 0 24px;
+}
+.mn-splash-glow {
+  position: absolute;
+  top: 90px;
+  left: 50%;
+  width: 640px;
+  height: 640px;
+  max-width: 190vw;
+  max-height: 190vw;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 61, 255, 0.5) 0%, rgba(139, 61, 255, 0.16) 38%, transparent 68%);
+  pointer-events: none;
+}
+.mn-splash-logo {
+  position: relative;
+  width: 180px;
+  height: auto;
+  border-radius: 40px;
+  box-shadow: 0 0 80px rgba(139, 61, 255, 0.55);
+}
+.mn-splash-title {
+  position: relative;
+  margin: 36px 0 8px;
+  font-size: 56px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+}
+.mn-splash-tagline {
+  position: relative;
+  margin: 0;
+  color: #a8a8b3;
+  font-size: 19px;
+  line-height: 1.4;
+}
+
+.mn-splash-spinner {
+  position: absolute;
+  left: 50%;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  width: 42px;
+  height: 42px;
+  margin-left: -21px;
+  border: 4px solid rgba(255, 255, 255, 0.12);
+  border-top-color: #8b3dff;
+  border-radius: 50%;
+}
+
+@keyframes mn-splash-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+@keyframes mn-splash-float {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes mn-splash-pulse {
+  50% {
+    opacity: 0.65;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+@keyframes mn-splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes mn-splash-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mn-splash-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mn-splash-logo {
+    animation: mn-splash-pop 650ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards, mn-splash-float 3s ease-in-out 650ms infinite;
+  }
+  .mn-splash-glow {
+    animation: mn-splash-pulse 2.6s ease-in-out infinite;
+  }
+  .mn-splash-title {
+    animation: mn-splash-rise 600ms cubic-bezier(0.2, 0, 0, 1) 200ms backwards;
+  }
+  .mn-splash-tagline {
+    animation: mn-splash-rise 600ms cubic-bezier(0.2, 0, 0, 1) 350ms backwards;
+  }
+  .mn-splash-spinner {
+    animation: mn-splash-spin 0.9s linear infinite, mn-splash-fade 500ms ease 500ms backwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Still a loader: a slow spin is the one thing that tells it is working. */
+  .mn-splash-spinner {
+    animation: mn-splash-spin 2.4s linear infinite;
+  }
+}
+@media (max-width: 380px) {
+  .mn-splash-logo {
+    width: 150px;
+  }
+  .mn-splash-title {
+    font-size: 46px;
+  }
+  .mn-splash-tagline {
+    font-size: 17px;
+  }
+}

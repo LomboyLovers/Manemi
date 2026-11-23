@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import SplashScreen from "@/components/SplashScreen";
 
 // Inter is the Manemi design system font. next/font self-hosts it, so there
 // is no request to Google at runtime and no layout shift.
@@ -31,7 +32,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       // only; mismatches anywhere else in the app are still reported.
       suppressHydrationWarning
     >
-      <body className={`${inter.className} min-h-full flex flex-col`}>{children}</body>
+      <head>
+        {/* Already opened the app this session? Hide the opening screen before first paint. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(sessionStorage.getItem("mn-splash"))document.documentElement.dataset.splash="seen"}catch(e){}`,
+          }}
+        />
+      </head>
+      <body className={`${inter.className} min-h-full flex flex-col`}>
+        <SplashScreen />
+        {children}
+      </body>
     </html>
   );
 }
