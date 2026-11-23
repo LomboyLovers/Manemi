@@ -905,3 +905,34 @@
 .mn-notif-list .mn-switch.is-on {
   background: var(--mn-accent, #8b3dff);
 }
+
+/* Sign-up → "Check your email" (single action, centered on wide screens) */
+.mn-check-email {
+  text-align: center;
+}
+.mn-check-email .mn-confirm-actions {
+  grid-template-columns: 1fr;
+}
+.mn-check-email-icon {
+  display: block;
+  margin: 6px auto 10px;
+  color: var(--mn-accent-light, #c4a1ff);
+}
+.mn-check-email p strong {
+  color: var(--mn-text, #f5f5f7);
+  overflow-wrap: anywhere;
+}
+@media (min-width: 768px) {
+  .mn-popup-center {
+    align-items: center;
+    padding: 24px;
+  }
+  .mn-popup-center .mn-popup-sheet {
+    max-width: 420px;
+    border-radius: 24px;
+    padding-bottom: 28px;
+  }
+  .mn-popup-center .mn-popup-handle {
+    display: none;
+  }
+}

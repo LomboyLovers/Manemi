@@ -2,8 +2,46 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useModalFocus } from "@/components/useModalFocus";
+import "@/components/popups.css";
+
+/** Shown after sign-up when the email still has to be confirmed. */
+function CheckEmailDialog({ email, onLogin }: { email: string; onLogin: () => void }) {
+  const ref = useModalFocus<HTMLElement>(onLogin);
+  return createPortal(
+    <div className="mn-popup-backdrop mn-popup-sheet-backdrop mn-popup-center" onClick={onLogin}>
+      <section
+        ref={ref}
+        className="mn-popup-sheet mn-confirm mn-check-email"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="check-email-title"
+        aria-describedby="check-email-body"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mn-popup-handle" aria-hidden="true" />
+        <svg className="mn-check-email-icon" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="3" />
+          <path d="m4 8 8 6 8-6" />
+        </svg>
+        <h2 id="check-email-title">Check your email</h2>
+        <p id="check-email-body">
+          We sent a confirmation link to <strong>{email}</strong>. Open it to activate your account, then log in. If you
+          don&apos;t see it, check your spam folder.
+        </p>
+        <div className="mn-confirm-actions">
+          <button type="button" className="mn-confirm-primary" onClick={onLogin} data-autofocus>
+            Back to Login
+          </button>
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+}
 
 export default function Register() {
   const router = useRouter();
@@ -11,6 +49,7 @@ export default function Register() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   async function handleRegister(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,12 +92,14 @@ export default function Register() {
     if (data.session) {
       router.push("/dashboard");
       router.refresh();
+    } else if (data.user && data.user.identities?.length === 0) {
+      // Supabase hides whether an email is taken: it "succeeds" with no identity.
+      setError("An account with this email already exists. Try logging in instead.");
     } else {
-      setError(
-        "Account created. Please check your email to confirm your account before logging in.",
-      );
+      setSentTo(email);
     }
   }
+
   return (
     <main className="register-page bg-pan-left">
       <section className="register-container">
@@ -159,6 +200,7 @@ export default function Register() {
           </div>
         </div>
       </section>
+      {sentTo && <CheckEmailDialog email={sentTo} onLogin={() => router.push("/")} />}
     </main>
   );
 }
