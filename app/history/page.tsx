@@ -122,7 +122,10 @@ export default function HistoryPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 300);
   const [kind, setKind] = useState<Kind>("all");
+  // Type (groups / personal / both) is separate from which group.
+  const [scope, setScope] = useState<"groups" | "personal" | "all">("groups");
   const [groupId, setGroupId] = useState("all");
+  const groupFilter = scope === "personal" ? HISTORY_PERSONAL : scope === "all" ? HISTORY_EVERYTHING : groupId;
   const [sort, setSort] = useState<Sort>("newest");
   const [onlyMine, setOnlyMine] = useState(false);
   // HIST-02: category, member and date range
@@ -189,7 +192,7 @@ export default function HistoryPage() {
   // New filters start again at page 1.
   useEffect(() => {
     setPage(1);
-  }, [kind, groupId, debouncedSearch, onlyMine, sort, category, memberId, dateFrom, dateTo]);
+  }, [kind, scope, groupId, debouncedSearch, onlyMine, sort, category, memberId, dateFrom, dateTo]);
 
   const isLog = kind === "activity";
 
@@ -200,7 +203,7 @@ export default function HistoryPage() {
     setListLoading(true);
     setListError("");
     const supabase = createClient();
-    const filters = { groupId, query: debouncedSearch, onlyMine, sort, category, memberId, from: dateFrom, to: dateTo };
+    const filters = { groupId: groupFilter, query: debouncedSearch, onlyMine, sort, category, memberId, from: dateFrom, to: dateTo };
     const request = isLog
       ? searchActivity(supabase, userId, filters, page)
       : searchHistory(supabase, userId, { ...filters, kind: kind as "all" | "expenses" | "payments" }, page);
@@ -211,7 +214,7 @@ export default function HistoryPage() {
         else setItems(result.items as HistoryExpense[]);
         setTotal(result.total);
         const unfiltered =
-          !debouncedSearch.trim() && groupId === "all" && !onlyMine && kind === "all" &&
+          !debouncedSearch.trim() && groupFilter === "all" && !onlyMine && kind === "all" &&
           category === "all" && memberId === "all" && !dateFrom && !dateTo;
         if (unfiltered) setEverything(result.total);
         // Deleted rows can leave us past the last page.
@@ -226,7 +229,7 @@ export default function HistoryPage() {
     return () => {
       active = false; // a newer request replaced this one
     };
-  }, [userId, isLog, kind, groupId, debouncedSearch, onlyMine, sort, category, memberId, dateFrom, dateTo, page, reloadKey, dataVersion]);
+  }, [userId, isLog, kind, groupFilter, debouncedSearch, onlyMine, sort, category, memberId, dateFrom, dateTo, page, reloadKey, dataVersion]);
 
   const changePage = (next: number) => {
     setPage(next);
@@ -270,11 +273,12 @@ export default function HistoryPage() {
   );
 
   const filtersActive =
-    Boolean(search.trim()) || kind !== "all" || groupId !== "all" || onlyMine || sort !== "newest" ||
+    Boolean(search.trim()) || kind !== "all" || groupFilter !== "all" || onlyMine || sort !== "newest" ||
     category !== "all" || memberId !== "all" || Boolean(dateFrom || dateTo);
   const clearFilters = () => {
     setSearch("");
     setKind("all");
+    setScope("groups");
     setGroupId("all");
     setOnlyMine(false);
     setSort("newest");
@@ -287,7 +291,7 @@ export default function HistoryPage() {
 
   const groupOptions = groups;
   const noFilters =
-    !debouncedSearch.trim() && groupId === "all" && !onlyMine && category === "all" &&
+    !debouncedSearch.trim() && groupFilter === "all" && !onlyMine && category === "all" &&
     memberId === "all" && !dateFrom && !dateTo;
 
   return (
@@ -427,17 +431,31 @@ export default function HistoryPage() {
           <Select
             variant="chip"
             align="start"
-            label="Show"
-            value={groupId}
-            active={groupId !== "all"}
-            onChange={setGroupId}
+            label="Type"
+            prefix="Type"
+            value={scope}
+            active={scope !== "groups"}
+            onChange={(value) => setScope(value as "groups" | "personal" | "all")}
             options={[
-              { value: "all", label: "All groups" },
-              { value: HISTORY_PERSONAL, label: "Personal only" },
-              { value: HISTORY_EVERYTHING, label: "Groups + personal" },
-              ...groupOptions.map((group) => ({ value: group.id, label: group.name })),
+              { value: "groups", label: "Groups" },
+              { value: "personal", label: "Personal" },
+              { value: "all", label: "Groups + personal" },
             ]}
           />
+          {scope === "groups" && (
+            <Select
+              variant="chip"
+              align="start"
+              label="Group"
+              value={groupId}
+              active={groupId !== "all"}
+              onChange={setGroupId}
+              options={[
+                { value: "all", label: "All groups" },
+                ...groupOptions.map((group) => ({ value: group.id, label: group.name })),
+              ]}
+            />
+          )}
           {!isLog && kind !== "payments" && (
             <Select
               variant="chip"
@@ -608,12 +626,12 @@ export default function HistoryPage() {
         ) : items.length === 0 ? (
           <section className="mn-history-empty is-filtered" aria-labelledby="history-filtered-title">
             <h2 id="history-filtered-title">
-              {kind === "payments" && !search.trim() && groupId === "all" && !onlyMine
+              {kind === "payments" && !search.trim() && groupFilter === "all" && !onlyMine
                 ? "No payments yet"
                 : "No activity matches your filters"}
             </h2>
             <p>
-              {kind === "payments" && !search.trim() && groupId === "all" && !onlyMine
+              {kind === "payments" && !search.trim() && groupFilter === "all" && !onlyMine
                 ? "Payments you record when settling up will appear here."
                 : "Try a broader search, or reset the filters to see everything."}
             </p>

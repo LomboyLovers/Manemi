@@ -175,3 +175,15 @@
     opacity: 1;
   }
 }
+
+.mn-select-prefix {
+  color: var(--mn-muted, #a8a8b3);
+  font-weight: 500;
+}
+.mn-select-prefix::after {
+  content: ":";
+}
+.mn-select-trigger.is-active .mn-select-prefix {
+  color: inherit;
+  opacity: 0.75;
+}

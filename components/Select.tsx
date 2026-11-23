@@ -16,6 +16,8 @@ type Props = {
   variant?: "plain" | "chip" | "field";
   /** Highlight the chip (e.g. a filter that's on). */
   active?: boolean;
+  /** Small muted word before the value on the trigger ("Type"), so a chip says what it filters. */
+  prefix?: string;
   /** Which edge of the trigger the menu lines up with. */
   align?: "start" | "end";
 };
@@ -26,7 +28,7 @@ type Props = {
  * letter jumps to the next option starting with it. Focus returns to the
  * button when it closes.
  */
-export default function Select({ value, onChange, options, label, id, variant = "plain", active, align = "end" }: Props) {
+export default function Select({ value, onChange, options, label, id, variant = "plain", active, prefix, align = "end" }: Props) {
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
@@ -151,6 +153,7 @@ export default function Select({ value, onChange, options, label, id, variant = 
         }}
       >
         {current?.icon && <span className="mn-select-icon">{current.icon}</span>}
+        {prefix && <span className="mn-select-prefix">{prefix}</span>}
         <span className="mn-select-value">{current?.label}</span>
         <svg className="mn-select-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="m6 9 6 6 6-6" />
