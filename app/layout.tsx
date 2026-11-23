@@ -32,14 +32,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       // only; mismatches anywhere else in the app are still reported.
       suppressHydrationWarning
     >
-      <head>
-        {/* Already opened the app this session? Hide the opening screen before first paint. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{if(sessionStorage.getItem("mn-splash"))document.documentElement.dataset.splash="seen"}catch(e){}`,
-          }}
-        />
-      </head>
       <body className={`${inter.className} min-h-full flex flex-col`}>
         <SplashScreen />
         {children}

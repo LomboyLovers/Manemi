@@ -3,29 +3,19 @@
 import { useEffect, useState } from "react";
 import "./splash.css";
 
-const MIN_VISIBLE_MS = 1500;
+const MIN_VISIBLE_MS = 900;
 const FADE_MS = 450;
 
 /**
- * Opening screen: the Manemi logo, tagline and a spinning loader. It shows
- * once each time the app is opened (a new tab or a home-screen launch), stays
- * at least a moment so it never just flashes, then fades out. Moving between
- * pages doesn't bring it back: layout.tsx marks the session as seen in a tiny
- * script before the page paints, so a reload doesn't flash it either.
+ * Loading screen: the Manemi logo, tagline and a spinning loader. It shows
+ * whenever the app starts loading (opening it, reloading, logging out or in)
+ * and fades out once the page is ready, after a short minimum so it never just
+ * flashes. Moving between pages inside the app uses the page skeletons instead.
  */
 export default function SplashScreen() {
   const [phase, setPhase] = useState<"show" | "leave" | "gone">("show");
 
   useEffect(() => {
-    if (document.documentElement.dataset.splash === "seen") {
-      setPhase("gone");
-      return;
-    }
-    try {
-      sessionStorage.setItem("mn-splash", "1");
-    } catch {
-      // Storage blocked: it will simply show on every full load.
-    }
     const started = Date.now();
     let timer = 0;
     const finish = () => {

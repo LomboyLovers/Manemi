@@ -12,9 +12,6 @@
   /* If scripts never start, don't trap the user behind it. */
   animation: mn-splash-failsafe 1ms linear 8s forwards;
 }
-html[data-splash="seen"] .mn-splash {
-  display: none;
-}
 .mn-splash.is-leaving {
   opacity: 0;
   visibility: hidden;
