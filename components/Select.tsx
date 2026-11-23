@@ -80,6 +80,8 @@ export default function Select({ value, onChange, options, label, id, variant = 
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
+  // `options` is intentionally tracked through `labelsKey` so a new array with the same labels doesn't re-run this.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, labelsKey, align]);
 
   useEffect(() => {

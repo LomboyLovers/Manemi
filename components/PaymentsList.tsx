@@ -111,7 +111,7 @@ export default function PaymentsList({ payments, me, canManageAll, nameOf }: Pro
 function EditPaymentDialog({ payment, title, onClose }: { payment: PaymentRow; title: string; onClose: () => void }) {
   const [amount, setAmount] = useState((Number(payment.amount) || 0).toFixed(2));
   const [method, setMethod] = useState(String(payment.paymentMethod ?? "cash"));
-  const [date, setDate] = useState(toIso(new Date(payment.settledAt ?? payment.createdAt ?? Date.now())));
+  const [date, setDate] = useState(toIso(new Date(payment.settledAt ?? payment.createdAt ?? new Date())));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const close = () => {

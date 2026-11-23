@@ -1089,7 +1089,7 @@ export default function GroupsPage() {
               </div>
 
               <p className="new-group-info">
-                <span aria-hidden="true">ⓘ</span> You'll be the group owner.
+                <span aria-hidden="true">ⓘ</span> You&apos;ll be the group owner.
                 Invite friends after creating it. Each expense picks its own currency.
               </p>
               <button
