@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { invalidateGroupsData } from "@/lib/manemi/groups";
 import { invalidateCurrentUser } from "@/lib/manemi/friends";
@@ -23,7 +22,6 @@ type Props = {
 
 /** Account popup: bottom sheet on phones, centered dialog on desktop. */
 export default function AccountSheet({ name: initialName, email, handle, avatarUrl: initialAvatar = null, onClose }: Props) {
-  const router = useRouter();
   const ref = useModalFocus<HTMLElement>(onClose);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
@@ -51,8 +49,10 @@ export default function AccountSheet({ name: initialName, email, handle, avatarU
     }
     invalidateGroupsData();
     invalidateCurrentUser();
-    router.replace("/");
-    router.refresh();
+    // Full page load, not router.replace + refresh: the refresh re-requests the
+    // page we just left, gets redirected to login and fails ("Failed to fetch RSC
+    // payload"). A real navigation also drops every in-memory cache.
+    window.location.replace("/");
   }
 
   const subtitle = [handle ? `@${handle}` : "", email].filter(Boolean).join(" · ");
