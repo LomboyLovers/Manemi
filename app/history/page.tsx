@@ -15,7 +15,7 @@ import {
 import { CATEGORY_META, money, peso } from "@/lib/manemi/format";
 import DatePicker from "@/components/DatePicker";
 import { ACTIVITY_META, type ActivityItem } from "@/lib/manemi/activity";
-import { PAGE_SIZE, searchActivity, searchHistory } from "@/lib/manemi/search";
+import { HISTORY_EVERYTHING, HISTORY_PERSONAL, PAGE_SIZE, searchActivity, searchHistory } from "@/lib/manemi/search";
 import { useDebounced } from "@/lib/manemi/useDebounced";
 import Pagination from "@/components/Pagination";
 import CategoryIcon, { type GlyphName } from "@/components/CategoryIcon";
@@ -427,12 +427,14 @@ export default function HistoryPage() {
           <Select
             variant="chip"
             align="start"
-            label="Group"
+            label="Show"
             value={groupId}
             active={groupId !== "all"}
             onChange={setGroupId}
             options={[
               { value: "all", label: "All groups" },
+              { value: HISTORY_PERSONAL, label: "Personal only" },
+              { value: HISTORY_EVERYTHING, label: "Groups + personal" },
               ...groupOptions.map((group) => ({ value: group.id, label: group.name })),
             ]}
           />
@@ -638,13 +640,16 @@ export default function HistoryPage() {
                     ? { label: "Payment", color: "#3DDC84" }
                     : CATEGORY_META[item.category];
                   const who = involvement(item, userId);
+                  const isPersonal = item.groupId === HISTORY_PERSONAL;
                   return (
                     <li key={item.id}>
                       <Link
                         href={
-                          isPayment
-                            ? `/groups/${item.groupId}`
-                            : `/groups/${item.groupId}?expense=${encodeURIComponent(item.id)}`
+                          isPersonal
+                            ? `/personal/add?edit=${encodeURIComponent(item.id)}`
+                            : isPayment
+                              ? `/groups/${item.groupId}`
+                              : `/groups/${item.groupId}?expense=${encodeURIComponent(item.id)}`
                         }
                         className="mn-history-row"
                       >

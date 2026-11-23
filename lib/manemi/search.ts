@@ -11,9 +11,17 @@ type Supabase = ReturnType<typeof createClient>;
 
 export const PAGE_SIZE = 10;
 
+/** Which expenses the History list shows besides one group's. */
+export const HISTORY_PERSONAL = "personal";
+export const HISTORY_EVERYTHING = "everything";
+
 export type HistoryFilters = {
   kind: "all" | "expenses" | "payments";
-  groupId: string | "all";
+  /**
+   * "all" = every group (the default), a group id, "personal" = only your own
+   * expenses with no group, "everything" = every group plus personal.
+   */
+  groupId: string | "all" | typeof HISTORY_PERSONAL | typeof HISTORY_EVERYTHING;
   query: string;
   onlyMine: boolean;
   sort: "newest" | "oldest" | "largest";
@@ -40,7 +48,8 @@ export const escapeLike = (text: string) => text.trim().replace(/[\\%_]/g, (c) =
 type HistoryRow = {
   kind: "expense" | "payment";
   id: string;
-  group_id: string;
+  /** null for personal expenses. */
+  group_id: string | null;
   group_name: string;
   title: string | null;
   amount: number | string;
@@ -57,6 +66,8 @@ type HistoryRow = {
   total_count: number | string;
 };
 
+const isGroupFilter = (value: string) => value !== "all" && value !== HISTORY_PERSONAL && value !== HISTORY_EVERYTHING;
+
 export async function searchHistory(
   supabase: Supabase,
   me: string,
@@ -66,7 +77,8 @@ export async function searchHistory(
 ): Promise<Page<HistoryExpense>> {
   const { data, error } = await supabase.rpc("search_history", {
     p_kind: filters.kind,
-    p_group_id: filters.groupId === "all" ? null : filters.groupId,
+    p_group_id: isGroupFilter(filters.groupId) ? filters.groupId : null,
+    p_scope: filters.groupId === HISTORY_PERSONAL ? "personal" : filters.groupId === HISTORY_EVERYTHING ? "all" : "groups",
     p_query: filters.query.trim() || null,
     p_only_mine: filters.onlyMine,
     p_sort: filters.sort,
@@ -89,7 +101,7 @@ export async function searchHistory(
       return {
         kind: "payment",
         id: row.id,
-        groupId: row.group_id,
+        groupId: row.group_id ?? "",
         groupName: row.group_name,
         title:
           row.payer_id === me
@@ -112,7 +124,7 @@ export async function searchHistory(
     return {
       kind: "expense",
       id: row.id,
-      groupId: row.group_id,
+      groupId: row.group_id ?? HISTORY_PERSONAL,
       groupName: row.group_name,
       title: row.title ?? "Expense",
       amount: Number(row.amount) || 0,
@@ -154,8 +166,10 @@ export async function searchActivity(
   page: number,
   pageSize = PAGE_SIZE,
 ): Promise<Page<ActivityItem>> {
+  // Personal expenses have no audit log.
+  if (filters.groupId === HISTORY_PERSONAL) return { items: [], total: 0 };
   const { data, error } = await supabase.rpc("search_activity", {
-    p_group_id: filters.groupId === "all" ? null : filters.groupId,
+    p_group_id: isGroupFilter(filters.groupId) ? filters.groupId : null,
     p_query: filters.query.trim() || null,
     p_only_mine: filters.onlyMine,
     p_sort: filters.sort,
