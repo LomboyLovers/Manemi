@@ -475,23 +475,6 @@ export default function HistoryPage() {
           )}
         </div>
 
-        <div className="mn-history-type">
-    <Select
-      variant="chip"
-      align="end"
-      label="Type"
-      prefix="Type"
-      value={scope}
-      active={scope !== "all"}
-      onChange={(value) => setScope(value as "groups" | "personal" | "all")}
-      options={[
-        { value: "all", label: "Groups + personal" },
-        { value: "groups", label: "Groups" },
-        { value: "personal", label: "Personal" },
-      ]}
-    />
-        </div>
-
         <div className="mn-history-filters" role="toolbar" aria-label="Filter history">
           {scope !== "personal" && (
             [
@@ -557,6 +540,22 @@ export default function HistoryPage() {
               {dateTo ? new Date(`${dateTo}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric" }) : "Today"}
             </button>
           )}
+          <div className="mn-history-type">
+            <Select
+              variant="chip"
+              align="end"
+              label="Type"
+              prefix="Type"
+              value={scope}
+              active={scope !== "all"}
+              onChange={(value) => setScope(value as "groups" | "personal" | "all")}
+              options={[
+                { value: "all", label: "Groups + personal" },
+                { value: "groups", label: "Groups" },
+                { value: "personal", label: "Personal" },
+              ]}
+            />
+          </div>
         </div>
 
         {error && (
