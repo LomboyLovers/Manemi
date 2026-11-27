@@ -84,3 +84,25 @@
 .mn-pd-actions {
   margin-top: 12px;
 }
+.mn-pd-delete {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--mn-negative, #ff6b6b);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mn-pd-delete:focus-visible {
+  outline: 2px solid var(--mn-accent-light, #c4a1ff);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .mn-pd-delete:hover {
+    background: color-mix(in srgb, var(--mn-negative, #ff6b6b) 12%, transparent);
+  }
+}

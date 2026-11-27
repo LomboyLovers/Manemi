@@ -9,6 +9,7 @@ import Select from "@/components/Select";
 import DatePicker, { toIso } from "@/components/DatePicker";
 import CategoryIcon from "@/components/CategoryIcon";
 import Pagination from "@/components/Pagination";
+import PersonalDetailsDialog from "@/components/PersonalDetailsDialog";
 import { CATEGORY_META, categoryKey, money, peso, type CategoryKey } from "@/lib/manemi/format";
 import { loadGroupsDataCached, type CurrentUser, type GroupSummary } from "@/lib/manemi/groups";
 import { reportExpenses, type ReportRow } from "@/lib/manemi/search";
@@ -64,6 +65,7 @@ export default function ReportsPage() {
   const [custom, setCustom] = useState(() => rangeFor("month"));
   const [allRows, setAllRows] = useState<ReportRow[]>([]);
   const [category, setCategory] = useState<"all" | CategoryKey>("all");
+  const [openPersonal, setOpenPersonal] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
@@ -467,12 +469,12 @@ export default function ReportsPage() {
                   {/* Screen: one page at a time. Print: every row. */}
                   <tbody className="mn-screen-only">
                     {pageRows.map((row) => (
-                      <ReportTableRow key={row.id} row={row} />
+                      <ReportTableRow key={row.id} row={row} onOpenPersonal={setOpenPersonal} />
                     ))}
                   </tbody>
                   <tbody className="mn-print-only">
                     {rows.map((row) => (
-                      <ReportTableRow key={row.id} row={row} />
+                      <ReportTableRow key={row.id} row={row} onOpenPersonal={setOpenPersonal} />
                     ))}
                   </tbody>
                 </table>
@@ -487,11 +489,12 @@ export default function ReportsPage() {
         </section>
       </div>
       <AppNav active="reports" groups={groups} />
+      {openPersonal && <PersonalDetailsDialog id={openPersonal} onClose={() => setOpenPersonal(null)} />}
     </main>
   );
 }
 
-function ReportTableRow({ row }: { row: ReportRow }) {
+function ReportTableRow({ row, onOpenPersonal }: { row: ReportRow; onOpenPersonal: (id: string) => void }) {
   // data-label feeds the phone layout, where each row becomes a card.
   return (
     <tr>
@@ -503,6 +506,12 @@ function ReportTableRow({ row }: { row: ReportRow }) {
               ? `/personal/add?edit=${encodeURIComponent(row.id)}`
               : `/groups/${row.groupId}?expense=${encodeURIComponent(row.id)}`
           }
+          onClick={(event) => {
+            // Personal expenses open the same details popup as History (Edit / Delete there).
+            if (row.groupId !== "personal" || event.metaKey || event.ctrlKey) return;
+            event.preventDefault();
+            onOpenPersonal(row.id);
+          }}
         >
           {row.title}
         </Link>

@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useState, type ReactNode } from "react";
-import { useModalFocus } from "./useModalFocus";
+import { useSheet } from "./useModalFocus";
 import "./popups.css";
 
 type Props = {
@@ -20,10 +20,10 @@ type Props = {
 export default function ConfirmDialog({ title, children, confirmLabel, destructive, onConfirm, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const close = () => {
+  const guardedClose = () => {
     if (!busy) onClose();
   };
-  const ref = useModalFocus<HTMLElement>(close);
+  const { ref, close } = useSheet<HTMLElement>(guardedClose);
 
   async function confirm() {
     setBusy(true);

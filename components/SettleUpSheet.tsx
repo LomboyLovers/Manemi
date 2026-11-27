@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useState } from "react";
 import { peso } from "@/lib/manemi/format";
 import SettleUpForm from "./SettleUpForm";
-import { useModalFocus } from "./useModalFocus";
+import { useSheet } from "./useModalFocus";
 import "./popups.css";
 import "./settle-up.css";
 
@@ -26,13 +26,13 @@ export default function SettleUpSheet({ groupId, groupName, debts, initialReceiv
   const [receiverId, setReceiverId] = useState<string | null>(
     initialReceiverId ?? (debts.length === 1 ? debts[0].userId : null),
   );
-  const ref = useModalFocus<HTMLElement>(onClose);
+  const { ref, close } = useSheet<HTMLElement>(onClose);
   const target = debts.find((debt) => debt.userId === receiverId) ?? null;
   const canGoBack = Boolean(target) && debts.length > 1;
 
   // Portal: page containers use CSS containment, which would trap a fixed overlay.
   return createPortal(
-    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={onClose}>
+    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={close}>
       <section
         ref={ref}
         className="mn-popup-sheet mn-settle-sheet"
@@ -51,7 +51,7 @@ export default function SettleUpSheet({ groupId, groupName, debts, initialReceiv
             <span aria-hidden="true" />
           )}
           <h2 id="settle-title">Settle Debts</h2>
-          <button type="button" className="mn-popup-done" onClick={onClose}>
+          <button type="button" className="mn-popup-done" onClick={close}>
             Close
           </button>
         </header>
@@ -65,13 +65,13 @@ export default function SettleUpSheet({ groupId, groupName, debts, initialReceiv
             receiverName={target.name}
             owedCents={target.cents}
             onDone={onRecorded}
-            onCancel={debts.length > 1 ? () => setReceiverId(null) : onClose}
+            onCancel={debts.length > 1 ? () => setReceiverId(null) : close}
           />
         ) : debts.length === 0 ? (
           <div className="mn-settle-empty">
             <strong>You don&apos;t owe anyone here</strong>
             <p>You&apos;re square with everyone in {groupName}.</p>
-            <button type="button" className="mn-settle-cancel" onClick={onClose} data-autofocus>
+            <button type="button" className="mn-settle-cancel" onClick={close} data-autofocus>
               Close
             </button>
           </div>

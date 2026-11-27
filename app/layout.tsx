@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "./motion.css";
 import SplashScreen from "@/components/SplashScreen";
 
 // Inter is the Manemi design system font. next/font self-hosts it, so there

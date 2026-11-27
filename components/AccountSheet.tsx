@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { invalidateGroupsData } from "@/lib/manemi/groups";
 import { invalidateCurrentUser } from "@/lib/manemi/friends";
 import { notifyDataChanged } from "@/lib/manemi/events";
-import { useModalFocus } from "./useModalFocus";
+import { useSheet } from "./useModalFocus";
 import NotificationSettings from "./NotificationSettings";
 import ProfileEditor from "./ProfileEditor";
 import Avatar from "./Avatar";
@@ -22,7 +22,7 @@ type Props = {
 
 /** Account popup: bottom sheet on phones, centered dialog on desktop. */
 export default function AccountSheet({ name: initialName, email, handle, avatarUrl: initialAvatar = null, onClose }: Props) {
-  const ref = useModalFocus<HTMLElement>(onClose);
+  const { ref, close } = useSheet<HTMLElement>(onClose);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const [view, setView] = useState<"main" | "notifications" | "profile">("main");
@@ -60,7 +60,7 @@ export default function AccountSheet({ name: initialName, email, handle, avatarU
   // Portal to <body>: the sticky page header is its own stacking context, which
   // would otherwise trap this sheet underneath the bottom nav.
   return createPortal(
-    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={onClose}>
+    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={close}>
       <section
         ref={ref}
         className="mn-popup-sheet"
@@ -81,7 +81,7 @@ export default function AccountSheet({ name: initialName, email, handle, avatarU
           <h2 id="account-title">
             {view === "notifications" ? "Email notifications" : view === "profile" ? "Edit profile" : "Account"}
           </h2>
-          <button type="button" className="mn-popup-done" onClick={onClose} data-autofocus>
+          <button type="button" className="mn-popup-done" onClick={close} data-autofocus>
             Done
           </button>
         </header>

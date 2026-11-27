@@ -128,6 +128,8 @@ export default function HistoryPage() {
   const [scope, setScope] = useState<"groups" | "personal" | "all">("all");
   const [notice, setNotice] = useState("");
   const [openPersonal, setOpenPersonal] = useState<string | null>(null);
+  // Changes when a new filter / tab / page arrives, so the list fades in (not on silent refreshes).
+  const [shownKey, setShownKey] = useState("");
   // This month's spending (your share, pesos): groups and personal.
   const [month, setMonth] = useState<{ groups: number; personal: number } | null>(null);
   const [groupId, setGroupId] = useState("all");
@@ -247,6 +249,7 @@ export default function HistoryPage() {
     setListError("");
     const supabase = createClient();
     const filters = { groupId: groupFilter, query: debouncedSearch, onlyMine, sort, category, memberId: scope === "personal" ? "all" : memberId, from: dateFrom, to: dateTo };
+    const viewKey = [kind, groupFilter, debouncedSearch, onlyMine, sort, category, memberId, dateFrom, dateTo, page].join("|");
     const request = isLog
       ? searchActivity(supabase, userId, filters, page)
       : searchHistory(supabase, userId, { ...filters, kind: kind as "all" | "expenses" | "payments" }, page);
@@ -256,6 +259,7 @@ export default function HistoryPage() {
         if (isLog) setLogItems(result.items as ActivityItem[]);
         else setItems(result.items as HistoryExpense[]);
         setTotal(result.total);
+        setShownKey(viewKey);
         const unfiltered =
           !debouncedSearch.trim() && scope === "all" && !onlyMine && kind === "all" &&
           category === "all" && memberId === "all" && !dateFrom && !dateTo;
@@ -430,7 +434,13 @@ export default function HistoryPage() {
           </p>
         </div>
 
-        {openPersonal && <PersonalDetailsDialog id={openPersonal} onClose={() => setOpenPersonal(null)} />}
+        {openPersonal && (
+          <PersonalDetailsDialog
+            id={openPersonal}
+            onClose={() => setOpenPersonal(null)}
+            onDeleted={() => setNotice("Expense deleted.")}
+          />
+        )}
 
         {notice && (
           <p className="mn-history-notice" role="status">
@@ -615,7 +625,7 @@ export default function HistoryPage() {
               </div>
             </section>
           ) : (
-            <div className={`mn-history-results ${listLoading ? "is-busy" : ""}`} aria-busy={listLoading}>
+            <div key={shownKey} className={`mn-history-results mn-switch-in ${listLoading ? "is-busy" : ""}`} aria-busy={listLoading}>
             {logSections.map((section) => (
               <section key={section.key} className="mn-history-section" aria-labelledby={`l-${section.key}`}>
                 <h2 id={`l-${section.key}`} className="mn-history-label">
@@ -717,7 +727,7 @@ export default function HistoryPage() {
             </div>
           </section>
         ) : (
-          <div className={`mn-history-results ${listLoading ? "is-busy" : ""}`} aria-busy={listLoading}>
+          <div key={shownKey} className={`mn-history-results mn-switch-in ${listLoading ? "is-busy" : ""}`} aria-busy={listLoading}>
           {sections.map((section) => (
             <section key={section.key} className="mn-history-section" aria-labelledby={`h-${section.key}`}>
               <h2 id={`h-${section.key}`} className="mn-history-label">

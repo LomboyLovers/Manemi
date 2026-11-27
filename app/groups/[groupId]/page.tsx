@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSlidingPill } from "@/components/useSlidingPill";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -106,6 +107,7 @@ export default function GroupDetailsPage() {
   const [activeTab, setActiveTab] = useState<"expenses" | "balances">(
     "expenses",
   );
+  const tabsPill = useSlidingPill<HTMLDivElement>();
   const [balanceError, setBalanceError] = useState("");
 
   // Skeleton only for the first load of a group; refreshes (after a payment,
@@ -1042,7 +1044,7 @@ export default function GroupDetailsPage() {
                 </section>
               ) : (
                 <section className="md-expenses-section">
-                  <div className="md-tabs" role="tablist">
+                  <div ref={tabsPill} className="md-tabs mn-pill" role="tablist">
                     <button
                       type="button"
                       role="tab"
@@ -1065,7 +1067,7 @@ export default function GroupDetailsPage() {
                   </div>
 
                   {activeTab === "balances" ? (
-                    <div role="tabpanel" className="md-balances-panel">
+                    <div role="tabpanel" className="md-balances-panel mn-switch-in">
                       {balanceError ? (
                         <p className="md-no-transactions">{balanceError}</p>
                       ) : (
@@ -1240,7 +1242,7 @@ export default function GroupDetailsPage() {
                     </div>
                   ) : (
                   <>
-                  <div className="md-categories">
+                  <div className="md-categories mn-switch-in">
                     {categories.map((category) => (
                       <button
                         key={category}
@@ -1261,7 +1263,7 @@ export default function GroupDetailsPage() {
                     ))}
                   </div>
 
-                  <div className="md-transactions">
+                  <div key={`${activeCategory}-${expensePageNow}`} className="md-transactions mn-switch-in">
                     {filteredExpenses.length === 0 ? (
                       <p className="md-no-transactions">
                         No expenses found in this category.

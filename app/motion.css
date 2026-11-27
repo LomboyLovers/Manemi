@@ -1,0 +1,171 @@
+/* ==========================================
+   Shared motion: popups slide up, tabs slide, chips and lists ease in.
+   Loaded once from app/layout.tsx. Everything here is skipped with
+   "reduce motion" on.
+   ========================================== */
+
+:root {
+  --mn-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1); /* iOS sheet curve */
+  --mn-sheet-in: 380ms;
+  --mn-sheet-out: 200ms;
+}
+
+/* ---------- popups: sheet slides up, backdrop fades ---------- */
+.mn-popup-backdrop {
+  animation: mn-backdrop-in 240ms ease-out backwards;
+}
+.mn-popup-sheet {
+  /* "backwards", not "both": a transform kept after the animation would make
+     the sheet the containing block for fixed popovers inside it (date picker). */
+  animation: mn-sheet-in var(--mn-sheet-in) var(--mn-sheet-ease) backwards;
+}
+.mn-popup-backdrop.is-leaving {
+  animation: mn-backdrop-out var(--mn-sheet-out) ease-in both;
+  pointer-events: none;
+}
+.mn-popup-sheet.is-leaving {
+  animation: mn-sheet-out var(--mn-sheet-out) cubic-bezier(0.4, 0, 1, 1) both;
+}
+/* Quick actions (the + menu) rises from its button. */
+.mn-quick {
+  animation: mn-quick-in 280ms var(--mn-sheet-ease) backwards;
+  transform-origin: bottom right;
+}
+@media (min-width: 768px) {
+  /* Centered dialogs on desktop: a shorter rise with a fade. */
+  .mn-popup-sheet {
+    animation-name: mn-dialog-in;
+  }
+  .mn-popup-sheet.is-leaving {
+    animation-name: mn-dialog-out;
+  }
+  .mn-quick {
+    transform-origin: top left;
+  }
+}
+
+@keyframes mn-backdrop-in {
+  from { opacity: 0; }
+}
+@keyframes mn-backdrop-out {
+  to { opacity: 0; }
+}
+@keyframes mn-sheet-in {
+  from { transform: translateY(100%); }
+}
+@keyframes mn-sheet-out {
+  to { transform: translateY(100%); }
+}
+@keyframes mn-dialog-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+}
+@keyframes mn-dialog-out {
+  to { opacity: 0; transform: translateY(16px) scale(0.98); }
+}
+@keyframes mn-quick-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+}
+
+/* ---------- segmented tabs: the highlight slides (useSlidingPill) ---------- */
+.mn-pill {
+  position: relative;
+  isolation: isolate;
+}
+.mn-pill::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: var(--pill-w, 0);
+  height: var(--pill-h, 0);
+  transform: translate(var(--pill-x, 0), var(--pill-y, 0));
+  border-radius: var(--pill-r, 999px);
+  background: var(--pill-bg, #37343f);
+  box-shadow: var(--pill-shadow, none);
+  opacity: 0;
+  pointer-events: none;
+}
+.mn-pill.has-pill::before {
+  opacity: 1;
+}
+.mn-pill.pill-ready::before {
+  transition:
+    transform 340ms var(--mn-sheet-ease),
+    width 340ms var(--mn-sheet-ease),
+    height 340ms var(--mn-sheet-ease);
+}
+/* The pill paints the highlight, so the selected button itself goes clear. */
+.mn-pill.has-pill > [aria-pressed="true"],
+.mn-pill.has-pill > [aria-selected="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+.mn-pill > button {
+  transition: color 240ms ease;
+}
+
+.mn-spend-toggle {
+  --pill-bg: var(--mn-gradient, linear-gradient(110deg, #7a2ff0, #a23de8));
+  --pill-r: 999px;
+}
+.md-tabs {
+  --pill-bg: #37343f;
+  --pill-r: 9px;
+  --pill-shadow: 0 1px 4px #0005;
+}
+.ae-modes {
+  --pill-bg: #36343d;
+  --pill-r: 12px;
+  --pill-shadow: 0 0 0 1px #56525e;
+}
+
+/* ---------- category / filter chips: colour eases, a light press ---------- */
+.mn-chip,
+.manemi-rich-filter,
+.ae-categories button,
+.md-categories button,
+.new-group-category-chip,
+.mn-reports-bar-row {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    opacity 220ms ease,
+    transform 160ms ease;
+}
+.mn-chip:active,
+.manemi-rich-filter:active,
+.ae-categories button:active,
+.md-categories button:active,
+.new-group-category-chip:active {
+  transform: scale(0.96);
+}
+
+/* ---------- content that changes with a tab or filter fades in ---------- */
+.mn-switch-in {
+  animation: mn-switch-in 280ms cubic-bezier(0.2, 0, 0, 1) backwards;
+}
+@keyframes mn-switch-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-popup-backdrop,
+  .mn-popup-sheet,
+  .mn-quick,
+  .mn-switch-in {
+    animation: none;
+  }
+  .mn-pill.pill-ready::before,
+  .mn-pill > button {
+    transition: none;
+  }
+  .mn-chip:active,
+  .manemi-rich-filter:active,
+  .ae-categories button:active,
+  .md-categories button:active,
+  .new-group-category-chip:active {
+    transform: none;
+  }
+}

@@ -13,6 +13,7 @@ import {
   smoothPath,
   type SpendingPeriod,
 } from "@/lib/manemi/spending";
+import { useSlidingPill } from "./useSlidingPill";
 import "./spending-stats.css";
 
 const toIsoDay = (date: Date) =>
@@ -40,6 +41,8 @@ const SOURCES: Array<{ value: Source; label: string }> = [
  */
 export default function SpendingStats({ userId }: { userId: string }) {
   const [period, setPeriod] = useState<SpendingPeriod>("week");
+  const periodPill = useSlidingPill<HTMLDivElement>();
+  const sourcePill = useSlidingPill<HTMLDivElement>();
   const [compare, setCompare] = useState(true);
   const [source, setSource] = useState<Source>("combined");
   const [groupRows, setGroupRows] = useState<ReportRow[] | null>(null);
@@ -142,7 +145,7 @@ export default function SpendingStats({ userId }: { userId: string }) {
     <section className="mn-spend" aria-labelledby={`${id}-title`}>
       <div className="mn-spend-head">
         <h2 id={`${id}-title`}>Your spending</h2>
-        <div className="mn-spend-toggle" role="group" aria-label="Show">
+        <div ref={periodPill} className="mn-spend-toggle mn-pill" role="group" aria-label="Show">
           {(["week", "month"] as const).map((value) => (
             <button
               key={value}
@@ -160,7 +163,7 @@ export default function SpendingStats({ userId }: { userId: string }) {
         </div>
       </div>
 
-      <div className="mn-spend-toggle mn-spend-source" role="group" aria-label="Spending to include">
+      <div ref={sourcePill} className="mn-spend-toggle mn-spend-source mn-pill" role="group" aria-label="Spending to include">
         {SOURCES.map((item) => (
           <button
             key={item.value}

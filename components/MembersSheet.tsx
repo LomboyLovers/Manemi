@@ -3,7 +3,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import Avatar from "./Avatar";
-import { useModalFocus } from "./useModalFocus";
+import { useSheet } from "./useModalFocus";
 import { isZero, peso } from "@/lib/manemi/format";
 import "./popups.css";
 import "./members-sheet.css";
@@ -41,10 +41,10 @@ export default function MembersSheet({ groupName, members, meId, myRole, archive
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const close = () => {
+  const guardedClose = () => {
     if (!busy) onClose();
   };
-  const ref = useModalFocus<HTMLElement>(close);
+  const { ref, close } = useSheet<HTMLElement>(guardedClose);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   // Cancel gets focus when a confirmation opens (safe default).

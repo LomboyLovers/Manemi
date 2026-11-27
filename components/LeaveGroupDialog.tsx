@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cleanError } from "@/lib/manemi/friends";
 import { peso } from "@/lib/manemi/format";
 import { notifyDataChanged } from "@/lib/manemi/events";
-import { useModalFocus } from "./useModalFocus";
+import { useSheet } from "./useModalFocus";
 import "./popups.css";
 
 /** Signed balance with one person in the group: pesos, positive = they owe you. */
@@ -34,10 +34,10 @@ type Props = {
 export default function LeaveGroupDialog({ groupId, groupName, balances = [], onClose, onLeft, onSettle }: Props) {
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState("");
-  const close = () => {
+  const guardedClose = () => {
     if (!leaving) onClose();
   };
-  const ref = useModalFocus<HTMLElement>(close);
+  const { ref, close } = useSheet<HTMLElement>(guardedClose);
 
   const owes = balances.filter((item) => item.amount <= -0.005);
   const owedBy = balances.filter((item) => item.amount >= 0.005);

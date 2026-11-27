@@ -8,7 +8,7 @@ import Pagination from "@/components/Pagination";
 import { useDebounced } from "@/lib/manemi/useDebounced";
 import Icon from "@/components/Icon";
 import PageHeader from "@/components/PageHeader";
-import { useModalFocus } from "@/components/useModalFocus";
+import { useSheet } from "@/components/useModalFocus";
 import type { CurrentUser } from "@/lib/manemi/groups";
 import {
   listFriends,
@@ -414,9 +414,11 @@ function RemoveFriendDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const ref = useModalFocus<HTMLElement>(onCancel);
+  const { ref, close } = useSheet<HTMLElement>(() => {
+    if (!busy) onCancel();
+  });
   return (
-    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={() => !busy && onCancel()}>
+    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={close}>
       <section
         ref={ref}
         className="mn-popup-sheet mn-confirm"
@@ -432,7 +434,7 @@ function RemoveFriendDialog({
           each other to new groups until you&apos;re friends again.
         </p>
         <div className="mn-confirm-actions">
-          <button type="button" className="mn-friends-secondary" onClick={onCancel} disabled={busy} data-autofocus>
+          <button type="button" className="mn-friends-secondary" onClick={close} disabled={busy} data-autofocus>
             Cancel
           </button>
           <button type="button" className="mn-friends-danger mn-confirm-danger" onClick={onConfirm} disabled={busy}>

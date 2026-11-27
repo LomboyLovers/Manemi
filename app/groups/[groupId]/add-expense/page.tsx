@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSlidingPill } from "@/components/useSlidingPill";
 
 import { useParams, useRouter } from "next/navigation";
 
@@ -102,6 +103,7 @@ export default function AddExpensePage() {
   const [categoryUse, setCategoryUse] = useState<Record<string, number>>({});
 
   const [mode, setMode] = useState<SplitMode>("equally");
+  const modesPill = useSlidingPill<HTMLDivElement>();
 
   // The one source for the split: each member's share of the whole expense.
   // Equally / Exact / Percent are only views of it.
@@ -715,7 +717,7 @@ export default function AddExpensePage() {
                 </span>
               </div>
 
-              <div className="ae-modes" role="group" aria-label="Split method">
+              <div ref={modesPill} className="ae-modes mn-pill" role="group" aria-label="Split method">
                 <button
                   type="button"
                   className={mode === "equally" ? "active" : ""}

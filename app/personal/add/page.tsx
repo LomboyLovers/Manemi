@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/DatePicker";
 import Select from "@/components/Select";
@@ -34,11 +34,36 @@ const today = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
+// The edit id comes from useSearchParams, not window.location: on an in-app
+// tap (History → Edit) this page renders before the address bar changes, so
+// window.location still showed /history and Edit opened a blank new expense.
 export default function AddPersonalExpensePage() {
-  const router = useRouter();
-  const [editId] = useState(() =>
-    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("edit"),
+  return (
+    <Suspense fallback={<FormShell />}>
+      <PersonalExpenseRoute />
+    </Suspense>
   );
+}
+
+function PersonalExpenseRoute() {
+  const editId = useSearchParams().get("edit");
+  // A new key resets every field when moving between "add" and "edit X".
+  return <PersonalExpenseForm key={editId ?? "new"} editId={editId} />;
+}
+
+function FormShell() {
+  return (
+    <main className="ae-page">
+      <section className="ae-sheet">
+        <div className="ae-handle" aria-hidden="true" />
+        <p className="ae-state">Loading…</p>
+      </section>
+    </main>
+  );
+}
+
+function PersonalExpenseForm({ editId }: { editId: string | null }) {
+  const router = useRouter();
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(Boolean(editId));
   const [loadError, setLoadError] = useState("");
@@ -386,7 +411,7 @@ export default function AddPersonalExpensePage() {
           onConfirm={remove}
           onClose={() => setConfirmDelete(false)}
         >
-          This personal expense and its receipt will be removed. This can&apos;t be undone.
+          <p>This personal expense{existing.receiptUrl ? " and its receipt" : ""} will be removed. This can&apos;t be undone.</p>
         </ConfirmDialog>
       )}
     </main>

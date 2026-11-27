@@ -10,7 +10,7 @@ import {
   pendingInviteeIds,
   type FriendRow,
 } from "@/lib/manemi/friends";
-import { useModalFocus } from "./useModalFocus";
+import { useSheet } from "./useModalFocus";
 import "./popups.css";
 import "./friends.css";
 import { useDebounced } from "@/lib/manemi/useDebounced";
@@ -29,7 +29,6 @@ type Props = {
  */
 export default function InviteFriendsSheet({ groupId, groupName, memberIds, onClose }: Props) {
   const router = useRouter();
-  const ref = useModalFocus<HTMLElement>(onClose);
   const [friends, setFriends] = useState<FriendRow[] | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -40,6 +39,9 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
   // Names of everyone shown so far, for the "Invited …" message.
   const namesRef = useRef(new Map<string, string>());
   const [sending, setSending] = useState(false);
+  const { ref, close } = useSheet<HTMLElement>(() => {
+    if (!sending) onClose();
+  });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -109,7 +111,7 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
   const count = selected.size;
 
   return (
-    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={() => !sending && onClose()}>
+    <div className="mn-popup-backdrop mn-popup-sheet-backdrop" onClick={close}>
       <section
         ref={ref}
         className="mn-popup-sheet mn-invite-friends"
@@ -120,7 +122,7 @@ export default function InviteFriendsSheet({ groupId, groupName, memberIds, onCl
       >
         <div className="mn-popup-handle" aria-hidden="true" />
         <header className="mn-popup-sheet-header">
-          <button type="button" className="mn-popup-done mn-popup-cancel" onClick={onClose} disabled={sending}>
+          <button type="button" className="mn-popup-done mn-popup-cancel" onClick={close} disabled={sending}>
             Cancel
           </button>
           <h2 id="invite-friends-title">Invite Friends</h2>

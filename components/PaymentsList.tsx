@@ -8,7 +8,7 @@ import { notifyDataChanged } from "@/lib/manemi/events";
 import ConfirmDialog from "./ConfirmDialog";
 import DatePicker, { toIso } from "./DatePicker";
 import Pagination from "./Pagination";
-import { useModalFocus } from "./useModalFocus";
+import { useSheet } from "./useModalFocus";
 import "./settle-up.css";
 import "./popups.css";
 
@@ -114,10 +114,10 @@ function EditPaymentDialog({ payment, title, onClose }: { payment: PaymentRow; t
   const [date, setDate] = useState(toIso(new Date(payment.settledAt ?? payment.createdAt ?? new Date())));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const close = () => {
+  const guardedClose = () => {
     if (!saving) onClose();
   };
-  const ref = useModalFocus<HTMLElement>(close);
+  const { ref, close } = useSheet<HTMLElement>(guardedClose);
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
